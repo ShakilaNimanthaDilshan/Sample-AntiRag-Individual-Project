@@ -36,7 +36,6 @@ export default function NewReport() {
   const submit = async (e) => {
     e.preventDefault()
 
-    // If files are selected, use FormData; otherwise, send JSON
     let res
     if (files.length > 0) {
       const fd = new FormData()
@@ -44,7 +43,7 @@ export default function NewReport() {
       fd.append('body', body)
       fd.append('universityId', universityId)
       fd.append('anonymous', anonymous)
-      files.forEach(f => fd.append('media', f)) // must match multer field
+      files.forEach(f => fd.append('media', f))
       res = await api('/api/reports', { method: 'POST', body: fd })
     } else {
       const payload = { title, body, universityId, anonymous }
@@ -60,7 +59,7 @@ export default function NewReport() {
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto' }}>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: 20 }}>
       <h2>Create a report</h2>
       <form onSubmit={submit}>
         <input
@@ -111,15 +110,43 @@ export default function NewReport() {
           ))}
         </div>
 
-        <label style={{ display: 'block', marginTop: 8 }}>
+        {/* ✅ Fixed: Checkbox and label aligned */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: 10,
+            marginBottom: 10
+          }}
+        >
           <input
             type="checkbox"
+            id="anonymous"
             checked={anonymous}
             onChange={e => setAnonymous(e.target.checked)}
-          /> Post anonymously
-        </label>
+            style={{ width: 18, height: 18, cursor: 'pointer' }}
+          />
+          <label
+            htmlFor="anonymous"
+            style={{ fontSize: '15px', cursor: 'pointer', userSelect: 'none' }}
+          >
+            Post anonymously
+          </label>
+        </div>
 
-        <button type="submit" style={{ marginTop: 15, padding: '8px 16px' }}>
+        <button
+          type="submit"
+          style={{
+            marginTop: 15,
+            padding: '10px 20px',
+            backgroundColor: '#007BFF',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            cursor: 'pointer'
+          }}
+        >
           Submit
         </button>
       </form>
