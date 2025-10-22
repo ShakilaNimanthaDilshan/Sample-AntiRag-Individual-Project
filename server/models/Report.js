@@ -3,11 +3,35 @@ const mongoose = require('mongoose');
 const reportSchema = new mongoose.Schema({
   title: { type: String },
   body: { type: String, required: true },
-  university: { type: mongoose.Schema.Types.ObjectId, ref: 'University', required: true },
-  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // optional
+  university: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'University',
+    required: true
+  },
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   anonymous: { type: Boolean, default: false },
-  media: [{ url: String, type: String }], // we'll handle uploads later
-  status: { type: String, enum: ['pending', 'verified'], default: 'pending' },
+
+  // ✅ Updated media field: now supports full objects with validation
+  media: [
+    {
+      url: { type: String, required: true },
+      type: {
+        type: String,
+        enum: ['image', 'file'],
+        default: 'image'
+      }
+    }
+  ],
+
+  status: {
+    type: String,
+    enum: ['pending', 'verified'],
+    default: 'pending'
+  },
+  
   createdAt: { type: Date, default: Date.now }
 });
 
