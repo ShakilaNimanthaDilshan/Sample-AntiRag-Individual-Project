@@ -31,6 +31,10 @@ const reportSchema = new mongoose.Schema({
     enum: ['pending', 'verified'],
     default: 'pending'
   },
+
+  // Added fields
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  flags: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   
   createdAt: { type: Date, default: Date.now }
 });
