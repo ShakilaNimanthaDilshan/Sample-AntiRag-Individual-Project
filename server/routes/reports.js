@@ -295,7 +295,8 @@ router.get("/:id/comments", async (req, res) => {
   try {
     const comments = await Comment.find({ report: req.params.id })
       .populate("author", "name _id")
-      .sort({ createdAt: 1 }); // Show oldest first
+      .populate("replies.author", "name _id")
+      .sort({ createdAt: 1 });
 
     res.json(comments); // Just send the full comments list
   } catch (err) {
@@ -411,5 +412,98 @@ router.delete("/:id/comments/:commentId", auth, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// --- CREATE A REPLY ---
+// POST /api/reports/:id/comments/:commentId/replies
+router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
+  try {
+    const { body, anonymous } = req.body;
+    if (!body)
+      return res.status(400).json({ message: "Reply body is required" });
+
+    const comment = await Comment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    const newReply = {
+      body,
+      author: req.user.id, // Always save the author
+      anonymous: !!anonymous,
+    };
+
+    comment.replies.push(newReply);
+    await comment.save();
+
+    // Find the newly created reply to populate its author
+    const savedReply = comment.replies[comment.replies.length - 1];
+
+    res.status(201).json(savedReply); // Return the new reply
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// --- UPDATE A REPLY ---
+// PUT /api/reports/:id/comments/:commentId/replies/:replyId
+router.put(
+  "/:id/comments/:commentId/replies/:replyId",
+  auth,
+  async (req, res) => {
+    try {
+      const { body } = req.body;
+      if (!body) return res.status(400).json({ message: "Body is required" });
+
+      const comment = await Comment.findById(req.params.commentId);
+      if (!comment)
+        return res.status(404).json({ message: "Comment not found" });
+
+      const reply = comment.replies.id(req.params.replyId);
+      if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+      if (reply.author.toString() !== req.user.id) {
+        return res.status(403).json({ message: "User not authorized" });
+      }
+
+      reply.body = body;
+      await comment.save();
+
+      res.json(reply);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// --- DELETE A REPLY ---
+// DELETE /api/reports/:id/comments/:commentId/replies/:replyId
+router.delete(
+  "/:id/comments/:commentId/replies/:replyId",
+  auth,
+  async (req, res) => {
+    try {
+      const comment = await Comment.findById(req.params.commentId);
+      if (!comment)
+        return res.status(404).json({ message: "Comment not found" });
+
+      const reply = comment.replies.id(req.params.replyId);
+      if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+      if (reply.author.toString() !== req.user.id) {
+        return res.status(403).json({ message: "User not authorized" });
+      }
+
+      // Mongoose 8+
+      comment.replies.pull({ _id: req.params.replyId });
+      // Older Mongoose: reply.remove();
+
+      await comment.save();
+      res.json({ message: "Reply deleted" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
 
 module.exports = router;
