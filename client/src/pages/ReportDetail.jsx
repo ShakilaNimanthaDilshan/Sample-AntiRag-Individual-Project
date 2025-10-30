@@ -21,11 +21,20 @@ export default function ReportDetail() {
   const [commentBody, setCommentBody] = useState("");
   const [commentAnon, setCommentAnon] = useState(false);
 
-  // --- ADD THESE TWO LINES ---
-  const [editingCommentId, setEditingCommentId] = useState(null); // Tracks which comment is being edited
-  const [editingText, setEditingText] = useState(""); // Holds the text for the edit textarea
+  // Comment editing state
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingText, setEditingText] = useState("");
 
-  // Fetch report and comments
+  // Reply form state
+  const [replyingToId, setReplyingToId] = useState(null); // Which comment ID we are replying to
+  const [replyBody, setReplyBody] = useState("");
+  const [replyAnon, setReplyAnon] = useState(false);
+
+  // Reply editing state
+  const [editingReplyId, setEditingReplyId] = useState(null); // Which reply ID we are editing
+  const [editingReplyText, setEditingReplyText] = useState("");
+
+  // Fetch report and comments/replies
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -50,46 +59,11 @@ export default function ReportDetail() {
     fetchData();
   }, [id]); // Re-fetch if ID changes
 
-  // --- Handlers ---
-
-  const handleCommentSubmit = async (e) => {
-    e.preventDefault();
-    if (!user) return alert("Please log in to comment");
-    if (!commentBody.trim()) return;
-
-    const res = await api(`/api/reports/${id}/comments`, {
-      method: "POST",
-      body: { body: commentBody, anonymous: commentAnon },
-    });
-
-    if (res._id) {
-      let newComment = { ...res };
-
-      // We MUST create the full author object so the
-      // isCommentOwner (user.id === c.author._id) check
-      // passes instantly.
-      newComment.author = {
-        _id: user.id,
-        name: user.name || "You",
-      };
-
-      setComments([...comments, newComment]); // Add the fixed comment
-      setCommentBody(""); // Clear form
-      setCommentAnon(false);
-      //...// Add the fixed comment
-      setCommentBody(""); // Clear form
-      setCommentAnon(false);
-    } else {
-      alert(res.message || "Failed to post comment");
-    }
-  };
-
+  // --- Handlers for Reports ---
   const handleLike = async () => {
     if (!user) return alert("Please log in to like");
-
     const res = await api(`/api/reports/${id}/like`, { method: "PUT" });
     if (res.likes !== undefined) {
-      // Update the like count on the report
       setReport({ ...report, likeCount: res.likes });
     } else {
       alert(res.message || "Failed to like");
@@ -102,12 +76,10 @@ export default function ReportDetail() {
       !window.confirm("Are you sure you want to flag this report for review?")
     )
       return;
-
     const res = await api(`/api/reports/${id}/flag`, { method: "PUT" });
     alert(res.message || "Failed to flag");
   };
 
-  // --- Added from snippet 2 ---
   const handleDelete = async () => {
     if (
       !window.confirm(
@@ -117,13 +89,8 @@ export default function ReportDetail() {
       return;
     }
     try {
-      // Note: The API route from a previous step might return 'Report deleted successfully'
-      // This snippet expects 'Report deleted'. Adjust if your API differs.
       const res = await api(`/api/reports/${id}`, { method: "DELETE" });
-      if (
-        res.message === "Report deleted" ||
-        res.message === "Report deleted successfully"
-      ) {
+      if (res.message === "Report deleted") {
         alert("Report deleted successfully.");
         nav("/"); // Navigate to home
       } else {
@@ -131,57 +98,51 @@ export default function ReportDetail() {
       }
     } catch (err) {
       alert("An error occurred while deleting.");
-      console.error(err);
     }
   };
-  // --- End of added snippet ---
 
-  // --- Added from snippet 1 ---
-  const handleDeleteComment = async (commentId) => {
-    if (!window.confirm("Are you sure you want to delete this comment?")) {
-      return;
-    }
+  // --- Handlers for Comments ---
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) return alert("Please log in to comment");
+    if (!commentBody.trim()) return;
     try {
-      const res = await api(`/api/reports/${id}/comments/${commentId}`, {
-        method: "DELETE",
+      const res = await api(`/api/reports/${id}/comments`, {
+        method: "POST",
+        body: { body: commentBody, anonymous: commentAnon },
       });
-
-      if (
-        res.message === "Comment deleted" ||
-        res.message === "Comment deleted successfully"
-      ) {
-        // Made more robust
-        // Update the UI instantly by filtering out the deleted comment
-        setComments(comments.filter((c) => c._id !== commentId));
+      if (res._id) {
+        let newComment = { ...res };
+        newComment.author = { _id: user.id, name: user.name || "You" };
+        newComment.replies = []; // Initialize replies array
+        setComments([...comments, newComment]);
+        setCommentBody("");
+        setCommentAnon(false);
       } else {
-        alert(res.message || "Failed to delete comment.");
+        alert(res.message || "Failed to post comment");
       }
     } catch (err) {
       alert("An error occurred.");
-      console.error(err);
     }
   };
-  // --- End of added snippet ---
 
-  // --- Added from snippet 1 (new) ---
   const handleUpdateComment = async (commentId) => {
-    if (!editingText.trim()) return; // Don't save if empty
-
+    if (!editingText.trim()) return;
     try {
       const res = await api(`/api/reports/${id}/comments/${commentId}`, {
         method: "PUT",
-        body: { body: editingText }, // Send the new text
+        body: { body: editingText },
       });
-
       if (res._id) {
-        // Update the comment in our local state
+        // 'res' is the updated comment, but its 'replies' are not populated.
+        // We must merge 'res' with the *old* replies from the state.
         setComments(
-          comments.map(
-            (c) => (c._id === commentId ? res : c) // Replace the old comment with the new one
+          comments.map((c) =>
+            c._id === commentId
+              ? { ...res, replies: c.replies } // <-- Preserves replies
+              : c
           )
         );
-
-        // Exit editing mode
         setEditingCommentId(null);
         setEditingText("");
       } else {
@@ -189,21 +150,140 @@ export default function ReportDetail() {
       }
     } catch (err) {
       alert("An error occurred.");
-      console.error(err);
     }
   };
-  // --- End of added snippet ---
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm("Are you sure you want to delete this comment?"))
+      return;
+    try {
+      const res = await api(`/api/reports/${id}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+      if (res.message === "Comment deleted") {
+        setComments(comments.filter((c) => c._id !== commentId));
+      } else {
+        alert(res.message || "Failed to delete comment.");
+      }
+    } catch (err) {
+      alert("An error occurred.");
+    }
+  };
+
+  // --- Handlers for Replies ---
+  const handleReplySubmit = async (commentId) => {
+    if (!replyBody.trim()) return;
+    try {
+      const res = await api(
+        `/api/reports/${id}/comments/${commentId}/replies`,
+        {
+          method: "POST",
+          body: { body: replyBody, anonymous: replyAnon },
+        }
+      );
+
+      if (res._id) {
+        // 'res' is the new reply. We must "fake" its author object
+        let newReply = { ...res };
+        newReply.author = {
+          _id: user.id,
+          name: user.name || "You",
+        };
+
+        // Find the parent comment and add the new, fixed reply
+        setComments(
+          comments.map((c) =>
+            c._id === commentId
+              ? { ...c, replies: [...(c.replies || []), newReply] }
+              : c
+          )
+        );
+        setReplyingToId(null);
+        setReplyBody("");
+        setReplyAnon(false);
+      } else {
+        alert(res.message || "Failed to post reply");
+      }
+    } catch (err) {
+      alert("An error occurred.");
+    }
+  };
+
+  const handleUpdateReply = async (commentId, replyId) => {
+    if (!editingReplyText.trim()) return;
+    try {
+      const res = await api(
+        `/api/reports/${id}/comments/${commentId}/replies/${replyId}`,
+        {
+          method: "PUT",
+          body: { body: editingReplyText },
+        }
+      );
+
+      if (res._id) {
+        // 'res' is the updated reply, but its author is just an ID.
+        // We must "fake" the author object for the UI.
+        let updatedReply = { ...res };
+        updatedReply.author = {
+          _id: user.id,
+          name: user.name || "You",
+        };
+
+        setComments(
+          comments.map((c) =>
+            c._id === commentId
+              ? {
+                  ...c,
+                  replies: c.replies.map(
+                    (r) => (r._id === replyId ? updatedReply : r) // Use the fixed 'updatedReply'
+                  ),
+                }
+              : c
+          )
+        );
+        setEditingReplyId(null);
+        setEditingReplyText("");
+      } else {
+        alert(res.message || "Failed to update reply");
+      }
+    } catch (err) {
+      alert("An error occurred.");
+    }
+  };
+
+  const handleDeleteReply = async (commentId, replyId) => {
+    if (!window.confirm("Are you sure you want to delete this reply?")) return;
+    try {
+      const res = await api(
+        `/api/reports/${id}/comments/${commentId}/replies/${replyId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (res.message === "Reply deleted") {
+        setComments(
+          comments.map((c) =>
+            c._id === commentId
+              ? { ...c, replies: c.replies.filter((r) => r._id !== replyId) }
+              : c
+          )
+        );
+      } else {
+        alert(res.message || "Failed to delete reply");
+      }
+    } catch (err) {
+      alert("An error occurred.");
+    }
+  };
 
   // --- Render ---
-
   if (loading) return <div>Loading...</div>;
   if (error) return <div style={{ color: "red" }}>{error}</div>;
   if (!report) return <div>Report not found.</div>;
 
   const base = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-  // Use user.id or user._id for robustness
-  const currentUserId = user?.id || user?._id;
-  const isOwner = user && report.author && currentUserId === report.author._id;
+  const isOwner = user && report.author && user.id === report.author._id;
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -258,7 +338,7 @@ export default function ReportDetail() {
           </div>
         )}
 
-        {/* --- REPLACED ACTIONS BLOCK --- */}
+        {/* Actions: Like & Flag */}
         <div
           style={{
             display: "flex",
@@ -274,14 +354,11 @@ export default function ReportDetail() {
             🚩 Flag for Review
           </button>
 
-          {/* --- NEW EDIT/DELETE BUTTONS --- */}
-          {/* Show these only if user is logged in AND user.id matches report.author.id */}
-          {isOwner && ( // Use the 'isOwner' boolean
+          {isOwner && (
             <>
-              <div style={{ flexGrow: 1 }} />{" "}
-              {/* This pushes buttons to the right */}
+              <div style={{ flexGrow: 1 }} />
               <button
-                onClick={() => nav(`/edit/${id}`)} // Added onClick from original code
+                onClick={() => nav(`/edit/${id}`)}
                 style={{ background: "#eee", color: "#333" }}
               >
                 Edit
@@ -295,47 +372,61 @@ export default function ReportDetail() {
             </>
           )}
         </div>
-        {/* --- END OF REPLACED BLOCK --- */}
       </article>
 
       {/* Comments Section */}
       <section style={{ marginTop: 20 }}>
         <h3>Comments ({comments.length})</h3>
 
-        {/* --- THIS IS THE FIXED FORM BLOCK --- */}
+        {/* New Comment Form */}
         {user ? (
           <form
             onSubmit={handleCommentSubmit}
             style={{
-              margin: "15px 0",
+              margin: "20px 0",
               background: "#f9f9f9",
-              padding: 10,
-              borderRadius: 5,
+              padding: "15px",
+              borderRadius: "8px",
+              boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
             }}
           >
+            {/* Comment Textarea */}
             <textarea
               value={commentBody}
               onChange={(e) => setCommentBody(e.target.value)}
               placeholder="Share your advice or thoughts..."
-              style={{ width: "100%", minHeight: 70, boxSizing: "border-box" }} // Added box-sizing
+              style={{
+                width: "100%",
+                minHeight: "80px",
+                boxSizing: "border-box",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
+                padding: "10px",
+                fontSize: "14px",
+                resize: "vertical",
+                outline: "none",
+              }}
             />
 
-            {/* This container DIV fixes the layout */}
+            {/* Checkbox aligned properly */}
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between", // Pushes checkbox left, button right
+                justifyContent: "space-between",
                 alignItems: "center",
-                marginTop: "10px",
               }}
             >
-              {/* Checkbox and label are grouped together */}
               <label
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "6px",
                   cursor: "pointer",
+                  fontSize: "14px",
+                  color: "#333",
                 }}
               >
                 <input
@@ -343,11 +434,27 @@ export default function ReportDetail() {
                   checked={commentAnon}
                   onChange={(e) => setCommentAnon(e.target.checked)}
                 />
-                Post anonymously
+                <span>Post anonymously</span>
               </label>
 
-              {/* Submit button is now inside the flex container */}
-              <button type="submit">Post Comment</button>
+              {/* Submit button on the right */}
+              <button
+                type="submit"
+                style={{
+                  background: "#007bff",
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "5px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  transition: "0.3s",
+                }}
+                onMouseOver={(e) => (e.target.style.background = "#0056b3")}
+                onMouseOut={(e) => (e.target.style.background = "#007bff")}
+              >
+                Post Comment
+              </button>
             </div>
           </form>
         ) : (
@@ -356,29 +463,24 @@ export default function ReportDetail() {
             comment.
           </p>
         )}
-        {/* --- END OF FIXED FORM BLOCK --- */}
 
-        {/* --- REPLACED COMMENTS LIST BLOCK --- */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Comments List */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
           {comments.map((c) => {
-            // Check if the logged-in user is the author
-            const isCommentOwner =
-              user && c.author && currentUserId === c.author._id;
-            // Check if this specific comment is being edited
-            const isEditing = editingCommentId === c._id;
+            const isCommentOwner = user && c.author && user.id === c.author._id;
+            const isEditingComment = editingCommentId === c._id;
+            const isReplying = replyingToId === c._id;
 
             return (
               <div
                 key={c._id}
                 style={{
                   border: "1px solid #eee",
-                  padding: 10,
+                  padding: "10px 15px",
                   borderRadius: 5,
                 }}
               >
-                {/* --- NEW CONDITIONAL EDITING BLOCK --- */}
-                {isEditing ? (
-                  // --- SHOW TEXTAREA IF EDITING ---
+                {isEditingComment ? (
                   <div>
                     <textarea
                       value={editingText}
@@ -404,17 +506,15 @@ export default function ReportDetail() {
                     </div>
                   </div>
                 ) : (
-                  // --- SHOW TEXT IF NOT EDITING ---
                   <p>{c.body}</p>
                 )}
-                {/* --- END OF CONDITIONAL BLOCK --- */}
 
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: isEditing ? "0" : "5px",
+                    marginTop: "5px",
                   }}
                 >
                   <small>
@@ -424,14 +524,30 @@ export default function ReportDetail() {
                     </strong>{" "}
                     • {formatDate(c.createdAt)}
                   </small>
-
-                  {isCommentOwner &&
-                    !isEditing && ( // Only show if owner AND not currently editing
-                      <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {user && !isEditingComment && (
+                      <button
+                        onClick={() =>
+                          setReplyingToId(isReplying ? null : c._id)
+                        }
+                        style={{
+                          fontSize: "0.8em",
+                          background: "#e0e0e0",
+                          color: "#333",
+                          border: "none",
+                          padding: "2px 5px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isReplying ? "Cancel" : "Reply"}
+                      </button>
+                    )}
+                    {isCommentOwner && !isEditingComment && (
+                      <>
                         <button
                           onClick={() => {
-                            setEditingCommentId(c._id); // Set this comment to editing mode
-                            setEditingText(c.body); // Pre-fill textarea with current text
+                            setEditingCommentId(c._id);
+                            setEditingText(c.body);
                           }}
                           style={{
                             fontSize: "0.8em",
@@ -457,15 +573,218 @@ export default function ReportDetail() {
                         >
                           Delete
                         </button>
-                      </div>
+                      </>
                     )}
+                  </div>
                 </div>
+
+                {isReplying && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleReplySubmit(c._id);
+                    }}
+                    style={{
+                      margin: "10px 0 0 20px",
+                      background: "#fdfdfd",
+                      padding: "10px",
+                      border: "1px solid #f0f0f0",
+                      borderRadius: "5px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    {/* Reply Textarea */}
+                    <textarea
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      placeholder="Write a reply..."
+                      style={{
+                        width: "100%",
+                        minHeight: "50px",
+                        boxSizing: "border-box",
+                        borderRadius: "5px",
+                        border: "1px solid #ccc",
+                        padding: "8px",
+                        fontSize: "14px",
+                        resize: "vertical",
+                        outline: "none",
+                      }}
+                    />
+
+                    {/* Checkbox + Button Row */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          color: "#333",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={replyAnon}
+                          onChange={(e) => setReplyAnon(e.target.checked)}
+                        />
+                        <span>Post anonymously</span>
+                      </label>
+
+                      <button
+                        type="submit"
+                        style={{
+                          background: "#007bff",
+                          color: "#fff",
+                          border: "none",
+                          padding: "6px 12px",
+                          borderRadius: "5px",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                          transition: "0.3s",
+                        }}
+                        onMouseOver={(e) =>
+                          (e.target.style.background = "#0056b3")
+                        }
+                        onMouseOut={(e) =>
+                          (e.target.style.background = "#007bff")
+                        }
+                      >
+                        Post Reply
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Replies List */}
+                {c.replies && c.replies.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: "15px",
+                      marginLeft: "20px",
+                      borderLeft: "2px solid #e0e0e0",
+                      paddingLeft: "10px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    {c.replies.map((reply) => {
+                      const isReplyOwner =
+                        user && reply.author && user.id === reply.author._id;
+                      const isEditingReply = editingReplyId === reply._id;
+
+                      return (
+                        <div key={reply._id}>
+                          {isEditingReply ? (
+                            <div>
+                              <textarea
+                                value={editingReplyText}
+                                onChange={(e) =>
+                                  setEditingReplyText(e.target.value)
+                                }
+                                style={{
+                                  width: "100%",
+                                  minHeight: "50px",
+                                  boxSizing: "border-box",
+                                }}
+                              />
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "8px",
+                                  marginTop: "5px",
+                                }}
+                              >
+                                <button
+                                  onClick={() =>
+                                    handleUpdateReply(c._id, reply._id)
+                                  }
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setEditingReplyId(null)}
+                                  style={{ background: "#eee", color: "#333" }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p style={{ margin: 0 }}>{reply.body}</p>
+                          )}
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginTop: "5px",
+                            }}
+                          >
+                            <small>
+                              By:{" "}
+                              <strong>
+                                {reply.anonymous
+                                  ? "Anonymous"
+                                  : reply.author?.name || "Unknown"}
+                              </strong>{" "}
+                              • {formatDate(reply.createdAt)}
+                            </small>
+                            {isReplyOwner && !isEditingReply && (
+                              <div style={{ display: "flex", gap: "8px" }}>
+                                <button
+                                  onClick={() => {
+                                    setEditingReplyId(reply._id);
+                                    setEditingReplyText(reply.body);
+                                  }}
+                                  style={{
+                                    fontSize: "0.75em",
+                                    background: "#eee",
+                                    color: "#333",
+                                    border: "none",
+                                    padding: "2px 5px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleDeleteReply(c._id, reply._id)
+                                  }
+                                  style={{
+                                    fontSize: "0.75em",
+                                    background: "#ffcccc",
+                                    color: "red",
+                                    border: "none",
+                                    padding: "2px 5px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
-          {comments.length === 0 && <p>Be the first to comment.</p>}
+          {comments.length === 0 && <p>Be a hero! Be the first to comment.</p>}
         </div>
-        {/* --- END OF REPLACED BLOCK --- */}
       </section>
     </div>
   );
