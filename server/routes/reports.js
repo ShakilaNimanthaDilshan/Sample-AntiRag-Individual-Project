@@ -204,7 +204,7 @@ router.put("/:id", auth, upload.array("media", 5), async (req, res) => {
 });
 
 // ========================
-// 🗑️ Delete a report (only by owner)
+// 🗑️ Delete a report (only by owner and admin)
 // DELETE /api/reports/:id
 // ========================
 router.delete("/:id", auth, async (req, res) => {
@@ -212,10 +212,13 @@ router.delete("/:id", auth, async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    if (report.author?.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You can only delete your own reports" });
+    // --- PERMISSION CHECK ---
+    const isOwner = report.author.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      // If the user is NOT the owner AND NOT an admin, deny access.
+      return res.status(403).json({ message: "User not authorized" });
     }
 
     await report.deleteOne();
@@ -374,7 +377,10 @@ router.delete("/:id", auth, async (req, res) => {
     if (!report) return res.status(404).json({ message: "Report not found" });
 
     // --- PERMISSION CHECK ---
-    if (report.author.toString() !== req.user.id) {
+    const isOwner = report.author.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ message: "User not authorized" });
     }
 
@@ -427,7 +433,10 @@ router.delete("/:id/comments/:commentId", auth, async (req, res) => {
     if (!comment) return res.status(404).json({ message: "Comment not found" });
 
     // --- PERMISSION CHECK ---
-    if (comment.author.toString() !== req.user.id) {
+    const isOwner = comment.author.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ message: "User not authorized" });
     }
 
@@ -515,7 +524,11 @@ router.delete(
       const reply = comment.replies.id(req.params.replyId);
       if (!reply) return res.status(404).json({ message: "Reply not found" });
 
-      if (reply.author.toString() !== req.user.id) {
+      // --- PERMISSION CHECK ---
+      const isOwner = reply.author.toString() === req.user.id;
+      const isAdmin = req.user.role === "admin";
+
+      if (!isOwner && !isAdmin) {
         return res.status(403).json({ message: "User not authorized" });
       }
 

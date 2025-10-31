@@ -89,15 +89,16 @@ export default function ReportDetail() {
       return;
     }
     try {
-      const res = await api(`/api/reports/${id}`, { method: "DELETE" });
-      if (res.message === "Report deleted") {
-        alert("Report deleted successfully.");
-        nav("/"); // Navigate to home
-      } else {
-        alert(res.message || "Failed to delete report.");
-      }
+      // The api() helper will throw an error if the status is not 2xx.
+      await api(`/api/reports/${id}`, { method: "DELETE" });
+
+      // If we get to this line, it means the delete was successful.
+      alert("Report deleted successfully.");
+      nav("/"); // Navigate to home
     } catch (err) {
-      alert("An error occurred while deleting.");
+      // If the server sends 403, 404, or 500, we end up here.
+      alert(err.message || "An error occurred while deleting.");
+      console.error(err);
     }
   };
 
@@ -284,6 +285,7 @@ export default function ReportDetail() {
 
   const base = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const isOwner = user && report.author && user.id === report.author._id;
+  const isAdmin = user && user.role === "admin";
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -354,7 +356,7 @@ export default function ReportDetail() {
             🚩 Flag for Review
           </button>
 
-          {isOwner && (
+          {(isOwner || isAdmin) && (
             <>
               <div style={{ flexGrow: 1 }} />
               <button
@@ -542,7 +544,7 @@ export default function ReportDetail() {
                         {isReplying ? "Cancel" : "Reply"}
                       </button>
                     )}
-                    {isCommentOwner && !isEditingComment && (
+                    {(isCommentOwner || isAdmin) && !isEditingComment && (
                       <>
                         <button
                           onClick={() => {
@@ -739,7 +741,7 @@ export default function ReportDetail() {
                               </strong>{" "}
                               • {formatDate(reply.createdAt)}
                             </small>
-                            {isReplyOwner && !isEditingReply && (
+                            {(isReplyOwner || isAdmin) && !isEditingReply && (
                               <div style={{ display: "flex", gap: "8px" }}>
                                 <button
                                   onClick={() => {
