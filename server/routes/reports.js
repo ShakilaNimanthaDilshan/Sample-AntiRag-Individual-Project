@@ -37,28 +37,54 @@ const upload = multer({
 // 📌 Create a new report
 // POST /api/reports/
 // ========================
+// Create a new report (with optional media files)
 router.post("/", auth, upload.array("media", 5), async (req, res) => {
   try {
-    let { title, body, universityId, anonymous } = req.body;
+    let { title, body, universityId, anonymous, otherUniversityName } =
+      req.body;
+    let finalUniversityId;
 
-    // 🧠 Convert "anonymous" from string to boolean properly
-    anonymous = anonymous === "true" || anonymous === true;
+    if (universityId === "OTHER") {
+      if (!otherUniversityName) {
+        return res
+          .status(400)
+          .json({ message: "Please provide a name for the university." });
+      }
 
-    if (!body || !universityId) {
+      const cleanName = otherUniversityName.trim().toLowerCase();
+
+      // Check if this university already exists (regardless of status)
+      let existingUni = await University.findOne({ name: cleanName });
+
+      if (existingUni) {
+        // It exists, just use its ID.
+        finalUniversityId = existingUni._id;
+      } else {
+        // It's a brand new university, create it as 'pending'
+        const newUni = new University({
+          name: cleanName,
+          location: "",
+          status: "pending", // <-- SET AS PENDING
+        });
+        await newUni.save();
+        finalUniversityId = newUni._id;
+      }
+    } else {
+      finalUniversityId = universityId;
+    }
+
+    // --- The rest of the function is the same ---
+
+    if (!body || !finalUniversityId) {
       return res
         .status(400)
-        .json({ message: "Body and universityId are required" });
+        .json({ message: "Body and university are required" });
     }
 
-    // Verify university
-    const uni = await University.findById(universityId);
-    if (!uni) {
-      return res.status(400).json({ message: "Invalid university" });
-    }
+    const uni = await University.findById(finalUniversityId);
+    if (!uni) return res.status(400).json({ message: "Invalid university" });
 
-    // Build absolute URLs for uploaded files
-    const base =
-      process.env.SERVER_BASE || `${req.protocol}://${req.get("host")}`;
+    const base = process.env.SERVER_BASE || "http://localhost:5000";
     const media = (req.files || []).map((f) => ({
       url: `${base}/uploads/${f.filename}`,
       type: f.mimetype.startsWith("image/") ? "image" : "file",
@@ -67,16 +93,16 @@ router.post("/", auth, upload.array("media", 5), async (req, res) => {
     const report = new Report({
       title,
       body,
-      university: universityId,
+      university: finalUniversityId,
       author: anonymous ? null : req.user.id,
-      anonymous,
+      anonymous: !!anonymous,
       media,
     });
 
     await report.save();
     res.status(201).json({ message: "Report created successfully", report });
   } catch (err) {
-    console.error("Report creation error:", err);
+    console.error(err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
@@ -178,7 +204,7 @@ router.put("/:id", auth, upload.array("media", 5), async (req, res) => {
 });
 
 // ========================
-// 🗑️ Delete a report (only by owner)
+// 🗑️ Delete a report (only by owner and admin)
 // DELETE /api/reports/:id
 // ========================
 router.delete("/:id", auth, async (req, res) => {
@@ -186,10 +212,13 @@ router.delete("/:id", auth, async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    if (report.author?.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You can only delete your own reports" });
+    // --- PERMISSION CHECK ---
+    const isOwner = report.author.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      // If the user is NOT the owner AND NOT an admin, deny access.
+      return res.status(403).json({ message: "User not authorized" });
     }
 
     await report.deleteOne();
@@ -295,7 +324,8 @@ router.get("/:id/comments", async (req, res) => {
   try {
     const comments = await Comment.find({ report: req.params.id })
       .populate("author", "name _id")
-      .sort({ createdAt: 1 }); // Show oldest first
+      .populate("replies.author", "name _id")
+      .sort({ createdAt: -1 }); //.sort({ createdAt: 1 }); This means oldest first
 
     res.json(comments); // Just send the full comments list
   } catch (err) {
@@ -347,7 +377,10 @@ router.delete("/:id", auth, async (req, res) => {
     if (!report) return res.status(404).json({ message: "Report not found" });
 
     // --- PERMISSION CHECK ---
-    if (report.author.toString() !== req.user.id) {
+    const isOwner = report.author.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ message: "User not authorized" });
     }
 
@@ -400,7 +433,10 @@ router.delete("/:id/comments/:commentId", auth, async (req, res) => {
     if (!comment) return res.status(404).json({ message: "Comment not found" });
 
     // --- PERMISSION CHECK ---
-    if (comment.author.toString() !== req.user.id) {
+    const isOwner = comment.author.toString() === req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({ message: "User not authorized" });
     }
 
@@ -411,5 +447,102 @@ router.delete("/:id/comments/:commentId", auth, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// --- CREATE A REPLY ---
+// POST /api/reports/:id/comments/:commentId/replies
+router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
+  try {
+    const { body, anonymous } = req.body;
+    if (!body)
+      return res.status(400).json({ message: "Reply body is required" });
+
+    const comment = await Comment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    const newReply = {
+      body,
+      author: req.user.id, // Always save the author
+      anonymous: !!anonymous,
+    };
+
+    comment.replies.push(newReply);
+    await comment.save();
+
+    // Find the newly created reply to populate its author
+    const savedReply = comment.replies[comment.replies.length - 1];
+
+    res.status(201).json(savedReply); // Return the new reply
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// --- UPDATE A REPLY ---
+// PUT /api/reports/:id/comments/:commentId/replies/:replyId
+router.put(
+  "/:id/comments/:commentId/replies/:replyId",
+  auth,
+  async (req, res) => {
+    try {
+      const { body } = req.body;
+      if (!body) return res.status(400).json({ message: "Body is required" });
+
+      const comment = await Comment.findById(req.params.commentId);
+      if (!comment)
+        return res.status(404).json({ message: "Comment not found" });
+
+      const reply = comment.replies.id(req.params.replyId);
+      if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+      if (reply.author.toString() !== req.user.id) {
+        return res.status(403).json({ message: "User not authorized" });
+      }
+
+      reply.body = body;
+      await comment.save();
+
+      res.json(reply);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// --- DELETE A REPLY ---
+// DELETE /api/reports/:id/comments/:commentId/replies/:replyId
+router.delete(
+  "/:id/comments/:commentId/replies/:replyId",
+  auth,
+  async (req, res) => {
+    try {
+      const comment = await Comment.findById(req.params.commentId);
+      if (!comment)
+        return res.status(404).json({ message: "Comment not found" });
+
+      const reply = comment.replies.id(req.params.replyId);
+      if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+      // --- PERMISSION CHECK ---
+      const isOwner = reply.author.toString() === req.user.id;
+      const isAdmin = req.user.role === "admin";
+
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ message: "User not authorized" });
+      }
+
+      // Mongoose 8+
+      comment.replies.pull({ _id: req.params.replyId });
+      // Older Mongoose: reply.remove();
+
+      await comment.save();
+      res.json({ message: "Reply deleted" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
 
 module.exports = router;

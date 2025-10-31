@@ -7,7 +7,8 @@ import NewReport from './pages/NewReport';
 import Nav from './components/Nav';
 import { useAuth } from './contexts/AuthContext';
 import EditReport from './pages/EditReport';
-import ReportDetail from './pages/ReportDetail'; // Added from snippet 1
+import ReportDetail from './pages/ReportDetail';
+import AdminDashboard from './pages/AdminDashboard'; // Added from snippet 1
 
 export default function App() {
   const { user } = useAuth();
@@ -21,10 +22,13 @@ export default function App() {
           <Route path="/register" element={user ? <Navigate to='/' /> : <Register />} />
           <Route path="/new" element={user ? <NewReport /> : <Navigate to='/login' />} />
           <Route path="/edit/:id" element={<EditReport />} />
-          
-          {/* Added from snippet 1 */}
           <Route path="/report/:id" element={<ReportDetail />} /> 
           
+          {/* --- ADD THIS ROUTE --- */}
+          <Route 
+            path="/admin" 
+            element={user && user.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />} 
+          />
         </Routes>
       </main>
     </div>
