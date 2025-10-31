@@ -115,7 +115,7 @@ export default function ReportDetail() {
         let newComment = { ...res };
         newComment.author = { _id: user.id, name: user.name || "You" };
         newComment.replies = []; // Initialize replies array
-        setComments([...comments, newComment]);
+        setComments([newComment, ...comments]); // This adds to the beginning
         setCommentBody("");
         setCommentAnon(false);
       } else {

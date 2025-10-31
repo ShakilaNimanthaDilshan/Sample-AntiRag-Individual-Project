@@ -39,6 +39,9 @@ app.use('/api/universities', universityRoutes);
 const reportRoutes = require('./routes/reports');
 app.use('/api/reports', reportRoutes);
 
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
+
 // ======================
 // 📌 Database connection
 // ======================

@@ -8,6 +8,13 @@ const universitySchema = new mongoose.Schema({
     counsellingPhone: String,
     email: String
   },
+  // --- ADDED ---
+  status: {
+    type: String,
+    enum: ['pending', 'approved'],
+    default: 'approved'
+  },
+  // --- END ADD ---
   createdAt: { type: Date, default: Date.now }
 });
 
