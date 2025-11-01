@@ -39,4 +39,9 @@ const reportSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// --- ADD THIS LINE ---
+// This tells MongoDB to create a text index on the title and body fields
+reportSchema.index({ title: 'text', body: 'text' });
+// --- END OF ADD ---
+
 module.exports = mongoose.model('Report', reportSchema);
