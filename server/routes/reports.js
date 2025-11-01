@@ -100,6 +100,8 @@ router.post("/", auth, upload.array("media", 5), async (req, res) => {
     });
 
     await report.save();
+    const io = req.app.get("socketio");
+    io.emit("analytics_updated"); // This sends the signal
     res.status(201).json({ message: "Report created successfully", report });
   } catch (err) {
     console.error(err);

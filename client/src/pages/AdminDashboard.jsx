@@ -15,11 +15,29 @@ export default function AdminDashboard() {
         api('/api/admin/universities/pending'),
         api('/api/universities') // Get all approved unis
       ]);
-      setPending(pendingRes || []);
-      // Filter out pending unis from the "approved" list
-      setApproved((approvedRes || []).filter(u => u.status !== 'pending'));
+
+      // --- THIS IS THE FIX ---
+      if (Array.isArray(pendingRes)) {
+        setPending(pendingRes);
+      } else {
+        console.error("Failed to fetch pending universities:", pendingRes?.message);
+        setPending([]); // Set to empty array on error
+      }
+      
+      if (Array.isArray(approvedRes)) {
+        // Filter out pending unis from the "approved" list
+        setApproved(approvedRes.filter(u => u.status !== 'pending'));
+      } else {
+        console.error("Failed to fetch universities:", approvedRes?.message);
+        setApproved([]); // Set to empty array on error
+      }
+      // --- END OF FIX ---
+
     } catch (err) {
       console.error("Failed to fetch data", err);
+      // Reset state on a major error
+      setPending([]);
+      setApproved([]);
     }
     setLoading(false);
   };
@@ -44,7 +62,10 @@ export default function AdminDashboard() {
     if (!goodId) return alert('Please select a university to merge into.');
 
     const goodUni = approved.find(u => u._id === goodId);
-    if (!window.confirm(`Are you sure you want to merge "${pending.find(p => p._id === badId).name}" into "${goodUni.name}"? This cannot be undone.`)) return;
+    // Add a check in case the pending uni name isn't found (it shouldn't happen, but safe)
+    const badUniName = pending.find(p => p._id === badId)?.name || 'the selected university';
+
+    if (!window.confirm(`Are you sure you want to merge "${badUniName}" into "${goodUni.name}"? This cannot be undone.`)) return;
 
     try {
       await api('/api/admin/universities/merge', {
