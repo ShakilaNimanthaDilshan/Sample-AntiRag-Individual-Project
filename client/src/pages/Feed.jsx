@@ -1,69 +1,102 @@
+// client/src/pages/Feed.jsx
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom'; // Import Link
+import { Link } from 'react-router-dom';
 import api from '../api';
 
 export default function Feed() {
   const [reports, setReports] = useState([]);
-  // const navigate = useNavigate() // No longer needed for edit/delete
-  // const user = JSON.parse(localStorage.getItem('user')) // No longer needed
+  const [search, setSearch] = useState(''); // <-- State for the search input
+  const [isLoading, setIsLoading] = useState(false); // <-- For user feedback
 
+  // Fetch all reports when the page first loads
   useEffect(() => {
     fetchReports();
   }, []);
 
-  // 🔄 Fetch all reports (This function is now corrected)
-  const fetchReports = async () => {
+  // Updated function to handle both all reports AND searches
+  const fetchReports = async (searchTerm = '') => {
+    setIsLoading(true);
+    let url = '/api/reports';
+
+    if (searchTerm) {
+      // If we have a search term, add it as a query parameter
+      url = `/api/reports?q=${encodeURIComponent(searchTerm)}`;
+    }
+    
     try {
-      const res = await api('/api/reports');
+      const res = await api(url);
       
-      // --- THIS IS THE FIX ---
-      // Check if the response is an array before setting state
       if (Array.isArray(res)) {
         setReports(res);
       } else {
-        // If it's not an array, it's an error (like 429 Too Many Requests)
-        console.error('Failed to fetch reports:', res.message || 'API returned non-array response');
-        setReports([]); // Reset to an empty array to prevent crash
+        console.error('Failed to fetch reports:', res.message);
+        setReports([]);
       }
-      // --- END OF FIX ---
-
     } catch (err) {
       console.error('Error fetching reports:', err);
-      setReports([]); // Also reset to an empty array on catch
+      setReports([]);
     }
+    setIsLoading(false);
   };
 
-  // ... (rest of your commented-out code is fine) ...
+  // --- NEW: Handler for submitting the search ---
+  const handleSearchSubmit = (e) => {
+    e.preventDefault(); // Stop the form from reloading the page
+    fetchReports(search); // Call fetchReports with the current search term
+  };
+
+  // --- NEW: Handler to clear the search ---
+  const handleClearSearch = () => {
+    setSearch('');
+    fetchReports(''); // Call fetchReports with an empty term to get all reports
+  };
 
   return (
-    <div>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
       <h2>Recent Reports</h2>
       <Link to="/new">Create report</Link>
 
-      <div>
-        {reports.length === 0 && <p>No reports yet</p>}
+      {/* --- NEW: SEARCH BAR --- */}
+      <form onSubmit={handleSearchSubmit} style={{ margin: '20px 0', display: 'flex', gap: '8px' }}>
+        <input
+          type="text"
+          placeholder="Search report titles and content..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ padding: '8px', flex: 1, fontSize: '16px' }}
+        />
+        <button type="submit" style={{ padding: '8px 12px' }}>Search</button>
+        <button type="button" onClick={handleClearSearch} style={{ padding: '8px 12px' }}>Clear</button>
+      </form>
+      {/* --- END OF SEARCH BAR --- */}
 
-        {/* Replaced map block */}
-        {reports.map(r => (
-          <Link to={`/report/${r._id}`} key={r._id} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <article style={{ border: '1px solid #ddd', padding: 10, marginTop: 10, cursor: 'pointer' }}>
-              <h3>{r.title || 'Experience'}</h3>
-              <small>{r.university?.name} • {new Date(r.createdAt).toLocaleString()}</small>
-              <p>{r.anonymous ? 'Posted anonymously' : (r.author?.name || 'Unknown')}</p>
-              <p style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                display: '-webkit-box',
-                WebkitLineClamp: 3, // Show 3 lines
-                WebkitBoxOrient: 'vertical'
-              }}>
-                {r.body}
-              </p>
-              {/* We'll show media on the detail page, not the feed */}
-              {/* You can add comment/like counts here later if you want */}
-            </article>
-          </Link>
-        ))}
+      <div>
+        {isLoading ? (
+          <p>Loading...</p>
+        ) : (
+          <>
+            {reports.length === 0 && <p>No reports found.</p>}
+
+            {reports.map(r => (
+              <Link to={`/report/${r._id}`} key={r._id} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <article style={{ border: '1px solid #ddd', padding: 10, marginTop: 10, cursor: 'pointer' }}>
+                  <h3>{r.title || 'Experience'}</h3>
+                  <small>{r.university?.name} • {new Date(r.createdAt).toLocaleString()}</small>
+                  <p>{r.anonymous ? 'Posted anonymously' : (r.author?.name || 'Unknown')}</p>
+                  <p style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {r.body}
+                  </p>
+                </article>
+              </Link>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
