@@ -110,18 +110,35 @@ router.post("/", auth, upload.array("media", 5), async (req, res) => {
 });
 
 // ========================
-// 📌 Get all reports
+// 📌 Get all reports (or search reports)
 // GET /api/reports/
 // ========================
-router.get("/", async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const reports = await Report.find()
-      .populate("university", "name")
-      .populate("author", "name role")
-      .sort({ createdAt: -1 });
+    const { q } = req.query; // Get search query from URL (e.g., /api/reports?q=test)
 
-    // Sanitize anonymous reports
-    const sanitized = reports.map((r) => {
+    let reports;
+
+    if (q) {
+      // --- IF THERE IS A SEARCH QUERY ---
+      reports = await Report.find(
+        { $text: { $search: q } }, // 1. Use the text index to find matches
+        { score: { $meta: 'textScore' } } // 2. Get the "relevance score"
+      )
+      .populate('university', 'name')
+      .populate('author', 'name')
+      .sort({ score: { $meta: 'textScore' } }); // 3. Sort by relevance (best match first)
+
+    } else {
+      // --- IF THERE IS NO SEARCH (Original Logic) ---
+      reports = await Report.find()
+        .populate('university', 'name')
+        .populate('author', 'name')
+        .sort({ createdAt: -1 }); // Sort by newest first
+    }
+
+    // Sanitize anonymous posts (this logic is the same)
+    const sanitized = reports.map(r => {
       const obj = r.toObject();
       if (obj.anonymous) obj.author = null;
       return obj;
@@ -129,10 +146,11 @@ router.get("/", async (req, res) => {
 
     res.json(sanitized);
   } catch (err) {
-    console.error("Fetch reports error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 // ========================
 // 📌 GET a single report by its ID
@@ -154,7 +172,6 @@ router.get("/:id", async (req, res) => {
     sanitized.likeCount = sanitized.likes.length;
     // Don't send the full list of likes/flags to the client
     delete sanitized.likes;
-    delete sanitized.flags;
 
     res.json(sanitized);
   } catch (err) {
@@ -172,7 +189,12 @@ router.put("/:id", auth, upload.array("media", 5), async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    if (report.author?.toString() !== req.user.id) {
+    // Check if author exists before checking ownership
+    if (!report.author) {
+       return res.status(403).json({ message: "Cannot update an anonymous report" });
+    }
+    
+    if (report.author.toString() !== req.user.id) {
       return res
         .status(403)
         .json({ message: "You can only update your own reports" });
@@ -215,17 +237,20 @@ router.delete("/:id", auth, async (req, res) => {
     if (!report) return res.status(404).json({ message: "Report not found" });
 
     // --- PERMISSION CHECK ---
-    const isOwner = report.author.toString() === req.user.id;
+    // Handle anonymous reports (no author)
+    const isOwner = report.author ? report.author.toString() === req.user.id : false;
     const isAdmin = req.user.role === "admin";
 
     if (!isOwner && !isAdmin) {
       // If the user is NOT the owner AND NOT an admin, deny access.
       return res.status(403).json({ message: "User not authorized" });
     }
+    
+    // Optional: Delete all comments associated with the report
+    await Comment.deleteMany({ report: req.params.id });
 
     await report.deleteOne();
-    // TODO: Also delete associated comments?
-    res.json({ message: "Report deleted successfully" });
+    res.json({ message: "Report deleted successfully" }); // Changed message
   } catch (err) {
     console.error("Report deletion error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
@@ -313,6 +338,10 @@ router.post("/:id/comments", auth, async (req, res) => {
     });
 
     await newComment.save();
+    
+    // Populate the author info before sending back
+    await newComment.populate('author', 'name _id');
+    
     res.status(201).json(newComment);
   } catch (err) {
     console.error(err);
@@ -327,72 +356,26 @@ router.get("/:id/comments", async (req, res) => {
     const comments = await Comment.find({ report: req.params.id })
       .populate("author", "name _id")
       .populate("replies.author", "name _id")
-      .sort({ createdAt: -1 }); //.sort({ createdAt: 1 }); This means oldest first
+      .sort({ createdAt: -1 }); // Switched to newest first
 
-    res.json(comments); // Just send the full comments list
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+    // Sanitize anonymous comments and replies
+    const sanitizedComments = comments.map(c => {
+        const commentObj = c.toObject();
+        if (commentObj.anonymous) {
+            commentObj.author = null;
+        }
+        
+        commentObj.replies = commentObj.replies.map(r => {
+            if (r.anonymous) {
+                r.author = null;
+            }
+            return r;
+        });
+        
+        return commentObj;
+    });
 
-// --- UPDATE A REPORT ---
-// PUT /api/reports/:id
-router.put("/:id", auth, async (req, res) => {
-  try {
-    const { title, body } = req.body;
-    if (!body) return res.status(400).json({ message: "Body is required" });
-
-    let report = await Report.findById(req.params.id);
-    if (!report) return res.status(404).json({ message: "Report not found" });
-
-    // --- PERMISSION CHECK ---
-    // Check if the logged-in user is the author
-    if (report.author.toString() !== req.user.id) {
-      return res.status(403).json({ message: "User not authorized" });
-    }
-
-    // Update the report
-    report.title = title || report.title;
-    report.body = body;
-    report.updatedAt = Date.now(); // Optional: you can add 'updatedAt' to your schema
-
-    await report.save();
-
-    // Return the updated report (re-populating for consistency)
-    const updatedReport = await Report.findById(req.params.id)
-      .populate("university", "name _id")
-      .populate("author", "name _id");
-
-    res.json(updatedReport);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// --- DELETE A REPORT ---
-// DELETE /api/reports/:id
-router.delete("/:id", auth, async (req, res) => {
-  try {
-    let report = await Report.findById(req.params.id);
-    if (!report) return res.status(404).json({ message: "Report not found" });
-
-    // --- PERMISSION CHECK ---
-    const isOwner = report.author.toString() === req.user.id;
-    const isAdmin = req.user.role === "admin";
-
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ message: "User not authorized" });
-    }
-
-    // Optional: Delete all comments associated with the report
-    await Comment.deleteMany({ report: req.params.id });
-
-    // Delete the report
-    await report.deleteOne();
-
-    res.json({ message: "Report deleted" });
+    res.json(sanitizedComments);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -418,9 +401,19 @@ router.put("/:id/comments/:commentId", auth, async (req, res) => {
     comment.body = body;
     await comment.save();
 
-    // Re-populate author for a consistent response
+    // Re-populate author and replies.author for a consistent response
     await comment.populate("author", "name _id");
-    res.json(comment);
+    await comment.populate("replies.author", "name _id");
+    
+    // Sanitize anonymous
+    const commentObj = comment.toObject();
+    if (commentObj.anonymous) commentObj.author = null;
+    commentObj.replies = commentObj.replies.map(r => {
+      if (r.anonymous) r.author = null;
+      return r;
+    });
+
+    res.json(commentObj);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -470,8 +463,17 @@ router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
     comment.replies.push(newReply);
     await comment.save();
 
-    // Find the newly created reply to populate its author
-    const savedReply = comment.replies[comment.replies.length - 1];
+    // Find the newly created reply
+    let savedReply = comment.replies[comment.replies.length - 1].toObject();
+    
+    // Populate its author manually (since it's a sub-doc)
+    const author = await User.findById(req.user.id).select('name _id');
+    savedReply.author = author;
+
+    // Sanitize if anonymous
+    if (savedReply.anonymous) {
+      savedReply.author = null;
+    }
 
     res.status(201).json(savedReply); // Return the new reply
   } catch (err) {
@@ -503,8 +505,16 @@ router.put(
 
       reply.body = body;
       await comment.save();
+      
+      // Manually populate author for response
+      const author = await User.findById(reply.author).select('name _id');
+      const replyObj = reply.toObject();
+      replyObj.author = author;
+      
+      // Sanitize
+      if (replyObj.anonymous) replyObj.author = null;
 
-      res.json(reply);
+      res.json(replyObj);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Server error" });

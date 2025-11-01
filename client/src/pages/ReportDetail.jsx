@@ -70,15 +70,31 @@ export default function ReportDetail() {
     }
   };
 
+  // --- THIS IS THE CORRECTED FUNCTION ---
   const handleFlag = async () => {
     if (!user) return alert("Please log in to flag");
     if (
       !window.confirm("Are you sure you want to flag this report for review?")
     )
       return;
-    const res = await api(`/api/reports/${id}/flag`, { method: "PUT" });
-    alert(res.message || "Failed to flag");
+    
+    try {
+      const res = await api(`/api/reports/${id}/flag`, { method: "PUT" });
+      
+      // --- ADD THIS BLOCK TO UPDATE THE UI INSTANTLY ---
+      setReport({
+        ...report,
+        flags: [...report.flags, user.id] // Manually add your ID to the flags array
+      });
+      // --- END OF NEW BLOCK ---
+
+      alert(res.message || "Flag submitted");
+    } catch (err) {
+      // This is where the 400 error goes, which is fine!
+      alert(err.message || "An error occurred");
+    }
   };
+  // --- END OF CORRECTED FUNCTION ---
 
   const handleDelete = async () => {
     if (
@@ -286,6 +302,8 @@ export default function ReportDetail() {
   const base = import.meta.env.VITE_API_BASE || "http://localhost:5000";
   const isOwner = user && report.author && user.id === report.author._id;
   const isAdmin = user && user.role === "admin";
+  // --- THIS IS THE NEW VARIABLE ---
+  const hasAlreadyFlagged = user && report?.flags?.includes(user.id);
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -352,9 +370,21 @@ export default function ReportDetail() {
           <button onClick={handleLike}>
             👍 Like ({report.likeCount || 0})
           </button>
-          <button onClick={handleFlag} style={{ color: "red" }}>
-            🚩 Flag for Review
+          
+          {/* --- THIS IS THE CORRECTED BUTTON --- */}
+          <button
+            onClick={handleFlag}
+            style={{
+              color: hasAlreadyFlagged ? "#555" : "red",
+              background: hasAlreadyFlagged ? "#f0f0f0" : "white",
+              border: hasAlreadyFlagged ? "1px solid #ccc" : "1px solid red",
+              cursor: hasAlreadyFlagged ? 'not-allowed' : 'pointer'
+            }}
+            disabled={hasAlreadyFlagged} // <-- Disables the button
+          >
+            {hasAlreadyFlagged ? "🚩 Flagged" : "🚩 Flag for Review"}
           </button>
+          {/* --- END OF CORRECTED BUTTON --- */}
 
           {(isOwner || isAdmin) && (
             <>
