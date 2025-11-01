@@ -11,37 +11,29 @@ export default function Feed() {
     fetchReports();
   }, []);
 
-  // 🔄 Fetch all reports
+  // 🔄 Fetch all reports (This function is now corrected)
   const fetchReports = async () => {
     try {
       const res = await api('/api/reports');
-      setReports(res || []);
+      
+      // --- THIS IS THE FIX ---
+      // Check if the response is an array before setting state
+      if (Array.isArray(res)) {
+        setReports(res);
+      } else {
+        // If it's not an array, it's an error (like 429 Too Many Requests)
+        console.error('Failed to fetch reports:', res.message || 'API returned non-array response');
+        setReports([]); // Reset to an empty array to prevent crash
+      }
+      // --- END OF FIX ---
+
     } catch (err) {
       console.error('Error fetching reports:', err);
+      setReports([]); // Also reset to an empty array on catch
     }
   };
 
-  // ✏️ Handle edit button (Removed from map)
-  // const handleEdit = (report) => {
-  //   navigate(`/edit/${report._id}`)
-  // }
-
-  // 🗑️ Handle delete button (Removed from map)
-  // const handleDelete = async (id) => {
-  //   if (!window.confirm('Are you sure you want to delete this report?')) return
-  //   try {
-  //     const res = await api(`/api/reports/${id}`, { method: 'DELETE' })
-  //     if (res.message === 'Report deleted successfully') {
-  //       alert('Report deleted successfully')
-  //       setReports(prev => prev.filter(r => r._id !== id))
-  //     } else {
-  //       alert(res.message || 'Error deleting report')
-  //     }
-  //   } catch (err) {
-  //     console.error('Delete error:', err)
-  //     alert('Server error while deleting')
-  //   }
-  // }
+  // ... (rest of your commented-out code is fine) ...
 
   return (
     <div>
