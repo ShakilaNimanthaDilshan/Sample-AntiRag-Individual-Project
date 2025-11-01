@@ -12,7 +12,10 @@ router.post(
   '/register',
   [
     check('name', 'Name is required').notEmpty(),
-    check('email', 'Valid email required').isEmail(),
+    // --- THIS IS THE FIX ---
+    // Added .normalizeEmail() for stricter validation
+    check('email', 'Valid email required').isEmail().normalizeEmail(),
+    // --- END OF FIX ---
     check('password', 'Password must be at least 6 characters').isLength({ min: 6 }),
     check('university', 'University is required').notEmpty(),
   ],
@@ -52,7 +55,7 @@ router.post(
 router.post(
   '/login',
   [
-    check('email', 'Valid email required').isEmail(),
+    check('email', 'Valid email required').isEmail().normalizeEmail(), // Also added normalizeEmail here
     check('password', 'Password is required').notEmpty(),
   ],
   async (req, res) => {

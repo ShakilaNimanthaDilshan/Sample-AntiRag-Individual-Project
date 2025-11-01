@@ -154,7 +154,6 @@ router.get("/:id", async (req, res) => {
     sanitized.likeCount = sanitized.likes.length;
     // Don't send the full list of likes/flags to the client
     delete sanitized.likes;
-    delete sanitized.flags;
 
     res.json(sanitized);
   } catch (err) {
