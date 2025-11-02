@@ -140,6 +140,7 @@ router.post(
           id: user._id,
           name: user.name,
           role: user.role,
+          isStudent: user.isStudent,
           university: user.university,
         },
       });

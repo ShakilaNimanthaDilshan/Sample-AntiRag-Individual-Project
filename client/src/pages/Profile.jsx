@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../api";
 import { useAuth } from "../contexts/AuthContext";
+import { Link } from "react-router-dom";
 
 export default function Profile() {
   const { user, setUser } = useAuth(); // Get user and setUser from context
@@ -119,6 +120,17 @@ export default function Profile() {
         </div>
 
         <button type="submit">Update Profile</button>
+
+        <div style={{ marginTop: "30px", textAlign: "center" }}>
+          <p>
+            By using this service, you agree to our
+            <Link to="/terms" target="_blank" rel="noopener noreferrer">
+              {" "}
+              Terms and Conditions
+            </Link>
+            .
+          </p>
+        </div>
       </form>
     </div>
   );

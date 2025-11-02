@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react'
 import api from '../api'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext' // <-- 1. IMPORT AUTOCONTEXT
 
 export default function NewReport() {
+  const { user } = useAuth() // <-- 2. GET THE LOGGED-IN USER
+  const nav = useNavigate()
+
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [universityId, setUniversityId] = useState('') // Default to empty string
-  const [universities, setUniversities] = useState([])
-  const [otherUniversityName, setOtherUniversityName] = useState(''); // <-- ADDED
+  
+  // 3. SET UNIVERSITY ID BASED ON USER TYPE
+  const [universityId, setUniversityId] = useState(user?.isStudent ? user.university : '')
+
+  const [universities, setUniversities] = useState([]) // For the dropdown
+  const [otherUniversityName, setOtherUniversityName] = useState('');
   const [anonymous, setAnonymous] = useState(false)
+  const [isPublic, setIsPublic] = useState(true);
+  
   const [files, setFiles] = useState([]) // image files
   const [previews, setPreviews] = useState([]) // preview URLs
-  const [isPublic, setIsPublic] = useState(true);
-  const nav = useNavigate()
 
   // Load universities list
   useEffect(() => {
@@ -21,8 +28,10 @@ export default function NewReport() {
         const u = await api('/api/universities')
         if (u && Array.isArray(u)) {
           // Filter out pending universities, only show approved ones
-          const approvedUniversities = u.filter(uni => uni.status !== 'pending'); // <-- MODIFIED
+          const approvedUniversities = u.filter(uni => uni.status !== 'pending');
           setUniversities(approvedUniversities || []);
+          // 4. REMOVED CONFLICTING LINE: The line that setUniversityId(u[0]._id) was here.
+          // It's removed so the user's default university is kept.
         }
       } catch (err) {
         console.error("Failed to fetch universities", err);
@@ -45,12 +54,10 @@ export default function NewReport() {
   const submit = async (e) => {
     e.preventDefault()
 
-    // --- ADDED VALIDATION ---
     if (!universityId) return alert('Please select a university.');
     if (universityId === 'OTHER' && !otherUniversityName.trim()) {
       return alert('Please enter the name of the university.');
     }
-    // --- END VALIDATION ---
 
     let res
     if (files.length > 0) {
@@ -60,29 +67,21 @@ export default function NewReport() {
       fd.append('anonymous', anonymous)
       fd.append('isPublic', isPublic)
       files.forEach(f => fd.append('media', f))
-
-      // --- MODIFIED LOGIC ---
       fd.append('universityId', universityId)
       if (universityId === 'OTHER') {
         fd.append('otherUniversityName', otherUniversityName)
       }
-      // --- END MODIFIED LOGIC ---
-
       res = await api('/api/reports', { method: 'POST', body: fd })
     } else {
-      // --- MODIFIED LOGIC ---
+      // --- 5. FIXED PAYLOAD (was missing fields) ---
       const payload = { 
         title, 
         body, 
         universityId, 
-        anonymous,
-        isPublic
+        anonymous, 
+        isPublic, // <-- Added
+        otherUniversityName: universityId === 'OTHER' ? otherUniversityName : '' // <-- Added
       }
-      if (universityId === 'OTHER') {
-        payload.otherUniversityName = otherUniversityName;
-      }
-      // --- END MODIFIED LOGIC ---
-
       res = await api('/api/reports', { method: 'POST', body: payload })
     }
 
@@ -93,6 +92,13 @@ export default function NewReport() {
       alert(res.message || 'Something went wrong while submitting')
     }
   }
+
+  // Helper to find the student's university name from the list
+  const getStudentUniversityName = () => {
+    if (!user || !user.isStudent) return '';
+    const uni = universities.find(u => u._id === user.university);
+    return uni ? uni.name : '(Your University)';
+  };
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: 20 }}>
@@ -113,38 +119,54 @@ export default function NewReport() {
           style={{ display: 'block', width: '100%', height: 120, marginBottom: 10, padding: 8, boxSizing: 'border-box' }}
         />
 
-        {/* --- MODIFIED SELECT --- */}
-        <label htmlFor="university-select" style={{ display: 'block', marginBottom: '5px' }}>Select your university *</label>
-        <select
-          id="university-select"
-          value={universityId}
-          onChange={e => setUniversityId(e.target.value)}
-          required
-          style={{ display: 'block', width: '100%', marginBottom: 10, padding: 8, boxSizing: 'border-box' }}
-        >
-          <option value="" disabled>-- Select a University --</option>
-          {universities.map(u => (
-            <option key={u._id} value={u._id}>{u.name}</option>
-          ))}
-          <option value="OTHER">Other (Please specify)</option> {/* <-- ADDED */}
-        </select>
-        {/* --- END MODIFIED SELECT --- */}
+        {/* --- 6. CONDITIONAL UNIVERSITY FIELDS --- */}
+        {!user ? (
+          <p>Loading user info...</p>
+        ) : user.isStudent ? (
+          // --- IF USER IS A STUDENT ---
+          <div>
+            <label>University (Locked to your profile)</label>
+            <input
+              type="text"
+              value={getStudentUniversityName()}
+              disabled
+              style={{ width: '100%', padding: 8, background: '#eee', boxSizing: 'border-box' }}
+            />
+          </div>
+        ) : (
+          // --- IF USER IS A NON-STUDENT (Show dropdown) ---
+          <>
+            <label htmlFor="university-select" style={{ display: 'block', marginBottom: '5px' }}>Which university is this report about? *</label>
+            <select
+              id="university-select"
+              value={universityId}
+              onChange={e => setUniversityId(e.target.value)}
+              required
+              style={{ display: 'block', width: '100%', marginBottom: 10, padding: 8, boxSizing: 'border-box' }}
+            >
+              <option value="" disabled>-- Select a University --</option>
+              {universities.map(u => (
+                <option key={u._id} value={u._id}>{u.name}</option>
+              ))}
+              <option value="OTHER">Other (Please specify)</option>
+            </select>
 
-        {/* --- ADDED CONDITIONAL INPUT --- */}
-        {universityId === 'OTHER' && (
-          <input
-            type="text"
-            placeholder="Please enter university name *"
-            value={otherUniversityName}
-            onChange={e => setOtherUniversityName(e.target.value)}
-            required
-            style={{ display: 'block', width: '100%', marginBottom: 10, padding: 8, boxSizing: 'border-box' }}
-          />
+            {universityId === 'OTHER' && (
+              <input
+                type="text"
+                placeholder="Please enter university name *"
+                value={otherUniversityName}
+                onChange={e => setOtherUniversityName(e.target.value)}
+                required
+                style={{ display: 'block', width: '100%', marginBottom: 10, padding: 8, boxSizing: 'border-box' }}
+              />
+            )}
+          </>
         )}
-        {/* --- END ADDED INPUT --- */}
+        {/* --- END OF CONDITIONAL FIELDS --- */}
 
 
-        <label style={{ display: 'block', marginBottom: 10 }}>
+        <label style={{ display: 'block', marginBottom: 10, marginTop: 10 }}>
           Upload images (max 5)
           <input
             type="file"
@@ -168,7 +190,6 @@ export default function NewReport() {
           ))}
         </div>
 
-        {/* --- REPLACED CHECKBOXES --- */}
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0' }}>
           <input 
             type="checkbox" 
@@ -178,11 +199,30 @@ export default function NewReport() {
           Make this report visible on the public feed
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0' }}>
-          <input type="checkbox" checked={anonymous} onChange={e => setAnonymous(e.target.checked)} /> 
-          Post anonymously
-        </label>
-        {/* --- END OF REPLACEMENT --- */}
+        {/* ✅ Fixed: Checkbox and label aligned */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: 10,
+            marginBottom: 10
+          }}
+        >
+          <input
+            type="checkbox"
+            id="anonymous"
+            checked={anonymous}
+            onChange={e => setAnonymous(e.target.checked)}
+            style={{ width: 18, height: 18, cursor: 'pointer' }}
+          />
+          <label
+            htmlFor="anonymous"
+            style={{ fontSize: '15px', cursor: 'pointer', userSelect: 'none' }}
+          >
+            Post anonymously
+          </label>
+        </div>
 
         <button
           type="submit"

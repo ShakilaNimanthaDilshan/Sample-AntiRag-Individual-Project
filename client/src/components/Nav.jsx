@@ -8,6 +8,7 @@ export default function Nav() {
     <nav style={{ padding: 10, borderBottom: "1px solid #eee", display: "flex", gap: "10px", alignItems: "center" }}>
       <Link to="/">Feed</Link>
       <Link to="/analytics">Analytics</Link>
+      <Link to="/help-resources" style={{ color: 'red', fontWeight: 'bold' }}> Get Help </Link>
       <Link to="/new">New Report</Link>
 
       {/* This div pushes everything else to the right */}

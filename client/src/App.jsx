@@ -12,6 +12,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import Profile from './pages/Profile'; // Added from snippet 1
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import ModerationQueue from './pages/ModerationQueue';
+import TermsAndConditions from './pages/TermsAndConditions';
+import HelpResources from './pages/HelpResources';
 
 export default function App() {
   const { user } = useAuth();
@@ -30,6 +32,8 @@ export default function App() {
           <Route path="/admin" element={user && user.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />} />
           <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
           <Route path="/moderation" element={user ? <ModerationQueue /> : <Navigate to="/login" />} />
+          <Route path="/terms" element={<TermsAndConditions />} />
+          <Route path="/help-resources" element={<HelpResources />} />
         </Routes>
       </main>
     </div>

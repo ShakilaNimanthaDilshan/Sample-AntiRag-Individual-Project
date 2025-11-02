@@ -147,12 +147,12 @@ router.get('/', async (req, res) => {
         { score: { $meta: 'textScore' } }
       )
       .populate('university', 'name')
-      .populate('author', 'name')
+      .populate('author', 'name isStudent profession')
       .sort({ score: { $meta: 'textScore' } });
     } else {
       reports = await Report.find({ isPublic: true })
         .populate('university', 'name')
-        .populate('author', 'name')
+        .populate('author', 'name isStudent profession')
         .sort({ createdAt: -1 });
     }
 
