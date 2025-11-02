@@ -32,6 +32,8 @@ const reportSchema = new mongoose.Schema({
     default: 'pending'
   },
 
+  isPublic: { type: Boolean, default: true },
+
   // Added fields
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   flags: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

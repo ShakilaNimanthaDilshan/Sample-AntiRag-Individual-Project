@@ -11,6 +11,7 @@ export default function NewReport() {
   const [anonymous, setAnonymous] = useState(false)
   const [files, setFiles] = useState([]) // image files
   const [previews, setPreviews] = useState([]) // preview URLs
+  const [isPublic, setIsPublic] = useState(true);
   const nav = useNavigate()
 
   // Load universities list
@@ -57,6 +58,7 @@ export default function NewReport() {
       fd.append('title', title)
       fd.append('body', body)
       fd.append('anonymous', anonymous)
+      fd.append('isPublic', isPublic)
       files.forEach(f => fd.append('media', f))
 
       // --- MODIFIED LOGIC ---
@@ -73,7 +75,8 @@ export default function NewReport() {
         title, 
         body, 
         universityId, 
-        anonymous 
+        anonymous,
+        isPublic
       }
       if (universityId === 'OTHER') {
         payload.otherUniversityName = otherUniversityName;
@@ -165,30 +168,21 @@ export default function NewReport() {
           ))}
         </div>
 
-        {/* ✅ Fixed: Checkbox and label aligned */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginTop: 10,
-            marginBottom: 10
-          }}
-        >
-          <input
-            type="checkbox"
-            id="anonymous"
-            checked={anonymous}
-            onChange={e => setAnonymous(e.target.checked)}
-            style={{ width: 18, height: 18, cursor: 'pointer' }}
+        {/* --- REPLACED CHECKBOXES --- */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0' }}>
+          <input 
+            type="checkbox" 
+            checked={isPublic} 
+            onChange={e => setIsPublic(e.target.checked)} 
           />
-          <label
-            htmlFor="anonymous"
-            style={{ fontSize: '15px', cursor: 'pointer', userSelect: 'none' }}
-          >
-            Post anonymously
-          </label>
-        </div>
+          Make this report visible on the public feed
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0' }}>
+          <input type="checkbox" checked={anonymous} onChange={e => setAnonymous(e.target.checked)} /> 
+          Post anonymously
+        </label>
+        {/* --- END OF REPLACEMENT --- */}
 
         <button
           type="submit"

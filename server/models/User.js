@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   passwordHash: { type: String, required: true },
-  role: { type: String, enum: ['student', 'admin'], default: 'student' },
+  role: { type: String, enum: ['student', 'admin', 'moderator'], default: 'student' },
   createdAt: { type: Date, default: Date.now },
 
   // --- NEW AND UPDATED FIELDS ---
