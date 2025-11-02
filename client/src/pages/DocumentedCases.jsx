@@ -1,6 +1,17 @@
 // client/src/pages/DocumentedCases.jsx
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import {
+  Container,
+  Typography,
+  Paper,
+  Box,
+  CircularProgress,
+  Card,
+  CardContent,
+  CardMedia,
+  Link as MuiLink,
+} from '@mui/material';
 
 export default function DocumentedCases() {
   const [cases, setCases] = useState([]);
@@ -10,6 +21,7 @@ export default function DocumentedCases() {
     const fetchCases = async () => {
       setLoading(true);
       try {
+        // This is your updated API call (from our previous step)
         const res = await api('/api/case-files');
         if (Array.isArray(res)) {
           setCases(res);
@@ -22,46 +34,65 @@ export default function DocumentedCases() {
     fetchCases();
   }, []);
 
-  const caseStyle = {
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    padding: '20px',
-    marginBottom: '20px',
-  };
-
   return (
-    <div style={{ maxWidth: 800, margin: '20px auto' }}>
-      <h1>Documented Incidents</h1>
-      <p>This is an archive of publicly documented ragging incidents and their outcomes. This information is curated by our moderation team to provide historical context.</p>
-      <hr />
+    <Container maxWidth="md" sx={{ mt: 4 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Historic Incidents
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        This is an archive of publicly documented incidents and news articles.
+        This information is curated by our moderation team to provide historical context.
+      </Typography>
       
       {loading ? (
-        <p>Loading cases...</p>
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 10 }}>
+          <CircularProgress />
+        </Box>
       ) : cases.length === 0 ? (
-        <p>No documented cases have been added yet.</p>
+        <Typography>No documented cases have been added yet.</Typography>
       ) : (
-        <div>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {cases.map(item => (
-            <article key={item._id} style={caseStyle}>
-              <h3>{item.title}</h3>
-              {item.dateOfIncident && (
-                <small>Date of Incident: {new Date(item.dateOfIncident).toLocaleDateString()}</small>
-              )}
+            <Card key={item._id} elevation={2}>
+              {/* CardMedia is used to display the image */}
               {item.imageUrl && (
-                <img src={item.imageUrl} alt={item.title} style={{ width: '100%', maxHeight: '300px', objectFit: 'cover', margin: '15px 0' }} />
+                <CardMedia
+                  component="img"
+                  height="250"
+                  image={item.imageUrl}
+                  alt={item.title}
+                  sx={{ objectFit: 'cover' }}
+                />
               )}
-              <p style={{ whiteSpace: 'pre-wrap' }}>{item.description}</p>
-              {item.sourceUrl && (
-                <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  Read source article
-                </a>
-              )}
-              <br/>
-              <small style={{ color: '#555', marginTop: '10px' }}>Posted by: {item.author?.name || 'Admin'}</small>
-            </article>
+              <CardContent>
+                <Typography variant="h5" component="h2" gutterBottom>
+                  {item.title}
+                </Typography>
+                
+                {item.dateOfIncident && (
+                  <Typography variant="body2" color="text.secondary">
+                    Date of Incident: {new Date(item.dateOfIncident).toLocaleDateString()}
+                  </Typography>
+                )}
+                
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Posted by: {item.author?.name || 'Admin'} on {new Date(item.createdAt).toLocaleDateString()}
+                </Typography>
+                
+                <Typography variant="body1" sx={{ my: 2, whiteSpace: 'pre-wrap' }}>
+                  {item.description}
+                </Typography>
+
+                {item.sourceUrl && (
+                  <MuiLink href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    Read source article
+                  </MuiLink>
+                )}
+              </CardContent>
+            </Card>
           ))}
-        </div>
+        </Box>
       )}
-    </div>
+    </Container>
   );
 }

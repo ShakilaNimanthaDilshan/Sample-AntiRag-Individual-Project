@@ -4,8 +4,9 @@ const path = require("path");
 const Report = require("../models/Report");
 const University = require("../models/University");
 const Comment = require("../models/Comment");
-const User = require("../models/User"); // <-- FIXED: Added missing import
+const User = require("../models/User");
 const auth = require("../middleware/auth");
+const getAuthUser = require("../middleware/getAuthUser");
 
 const router = express.Router();
 
@@ -86,7 +87,8 @@ router.post("/", auth, upload.array("media", 5), async (req, res) => {
       title,
       body,
       university: finalUniversityId,
-      author: anonymous ? null : req.user.id,
+      // --- FIXED: Always save the author ID, even if anonymous ---
+      author: req.user.id,
       anonymous: !!anonymous,
       media,
       isPublic: !!isPublic
@@ -122,7 +124,8 @@ router.get('/moderation', auth, async (req, res) => {
 
     const reports = await Report.find(query)
       .populate('university', 'name')
-      .populate('author', 'name')
+      // --- FIXED: Added missing fields ---
+      .populate('author', 'name _id isStudent profession')
       .sort({ createdAt: -1 });
 
     res.json(reports);
@@ -143,16 +146,18 @@ router.get('/', async (req, res) => {
 
     if (q) {
       reports = await Report.find(
-        { $text: { $search: q }, isPublic: true }, // Added isPublic filter to search
+        { $text: { $search: q }, isPublic: true },
         { score: { $meta: 'textScore' } }
       )
       .populate('university', 'name')
-      .populate('author', 'name isStudent profession')
+      // --- FIXED: Added _id ---
+      .populate('author', 'name _id isStudent profession')
       .sort({ score: { $meta: 'textScore' } });
     } else {
       reports = await Report.find({ isPublic: true })
         .populate('university', 'name')
-        .populate('author', 'name isStudent profession')
+        // --- FIXED: This was the main bug ---
+        .populate('author', 'name _id isStudent profession')
         .sort({ createdAt: -1 });
     }
 
@@ -174,25 +179,39 @@ router.get('/', async (req, res) => {
 // 📌 GET a single report by its ID
 // GET /api/reports/:id
 // ========================
-router.get("/:id", async (req, res) => {
+router.get("/:id", getAuthUser, async (req, res) => { // <-- USE getAuthUser
   try {
     const report = await Report.findById(req.params.id)
       .populate("university", "name _id") 
-      .populate("author", "name _id"); 
+      .populate("author", "name _id isStudent profession"); 
 
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    // We MUST check if the user has permission to view this report
-    // (This part needs auth middleware, but we'll add it simply here)
-    // For now, we assume if they have the ID, they can see it.
-    // A future step would be to add auth and check if it's public OR they are the author/mod/admin
+    // --- NEW PERMISSION CHECK ---
+    let isOwner = false;
+    let isAdmin = false;
+    let isModerator = false;
+
+    if (req.user) { // Check if a user is logged in
+      const user = await User.findById(req.user.id);
+      if (user) {
+        isOwner = report.author && report.author._id.equals(user._id);
+        isAdmin = user.role === 'admin';
+        isModerator = user.role === 'moderator' && user.university && user.university.equals(report.university._id);
+      }
+    }
+
+    // If the report is NOT public, AND the user is NOT logged in, OR is not the owner/admin/mod...
+    if (!report.isPublic && !isOwner && !isAdmin && !isModerator) {
+      return res.status(403).json({ message: "You do not have permission to view this report" });
+    }
+    // --- END PERMISSION CHECK ---
 
     const sanitized = report.toObject();
     if (sanitized.anonymous) sanitized.author = null;
     sanitized.likeCount = sanitized.likes.length;
     delete sanitized.likes;
-    // We KEEP sanitized.flags so the frontend can check 'hasAlreadyFlagged'
-    
+
     res.json(sanitized);
   } catch (err) {
     console.error(err);
@@ -209,14 +228,12 @@ router.put("/:id", auth, upload.array("media", 5), async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    // --- FIXED: PERMISSION CHECK ---
     const isOwner = report.author ? report.author.toString() === req.user.id : false;
     const isAdmin = req.user.role === 'admin';
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ message: "User not authorized" });
     }
-    // --- END FIX ---
 
     let { title, body, anonymous } = req.body;
     anonymous = anonymous === "true" || anonymous === true;
@@ -261,7 +278,7 @@ router.delete("/:id", auth, async (req, res) => {
     
     await Comment.deleteMany({ report: req.params.id });
     await report.deleteOne();
-    res.json({ message: "Report deleted" }); // Simpler message
+    res.json({ message: "Report deleted" });
   } catch (err) {
     console.error("Report deletion error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
@@ -334,7 +351,8 @@ router.post("/:id/comments", auth, async (req, res) => {
       anonymous: !!anonymous,
     });
     await newComment.save();
-    await newComment.populate('author', 'name _id');
+    // --- FIXED: Added missing fields ---
+    await newComment.populate('author', 'name _id isStudent profession');
     res.status(201).json(newComment);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -344,14 +362,13 @@ router.post("/:id/comments", auth, async (req, res) => {
 // GET all comments for a report
 router.get("/:id/comments", async (req, res) => {
   try {
-    // --- FIXED: Removed all sanitization logic ---
-    // The backend ALWAYS sends the author.
-    // The frontend HIDES the name if 'anonymous' is true.
+    // --- FIXED: Added missing fields ---
     const comments = await Comment.find({ report: req.params.id })
-      .populate("author", "name _id")
-      .populate("replies.author", "name _id")
+      .populate("author", "name _id isStudent profession")
+      .populate("replies.author", "name _id isStudent profession")
       .sort({ createdAt: -1 });
 
+    // --- FIXED: Removed bad sanitization ---
     res.json(comments);
   } catch (err) {
     console.error(err);
@@ -368,7 +385,6 @@ router.put("/:id/comments/:commentId", auth, async (req, res) => {
     let comment = await Comment.findById(req.params.commentId);
     if (!comment) return res.status(404).json({ message: "Comment not found" });
 
-    // --- FIXED: PERMISSION CHECK ---
     const isOwner = comment.author.toString() === req.user.id;
     const isAdmin = req.user.role === 'admin';
     if (!isOwner && !isAdmin) {
@@ -378,11 +394,10 @@ router.put("/:id/comments/:commentId", auth, async (req, res) => {
     comment.body = body;
     await comment.save();
 
-    // Re-populate for consistent response
-    await comment.populate("author", "name _id");
-    await comment.populate("replies.author", "name _id");
+    // --- FIXED: Added missing fields ---
+    await comment.populate("author", "name _id isStudent profession");
+    await comment.populate("replies.author", "name _id isStudent profession");
     
-    // --- FIXED: Removed all sanitization logic ---
     res.json(comment);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -429,9 +444,7 @@ router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
     };
     comment.replies.push(newReply);
     await comment.save();
-
-    // --- FIXED: Simplified response ---
-    // The frontend will "fake" the author for the instant UI update.
+    
     const savedReply = comment.replies[comment.replies.length - 1];
     res.status(201).json(savedReply);
   } catch (err) {
@@ -454,8 +467,7 @@ router.put(
 
       const reply = comment.replies.id(req.params.replyId);
       if (!reply) return res.status(404).json({ message: "Reply not found" });
-
-      // --- FIXED: PERMISSION CHECK ---
+      
       const isOwner = reply.author.toString() === req.user.id;
       const isAdmin = req.user.role === 'admin';
       if (!isOwner && !isAdmin) {
@@ -465,7 +477,6 @@ router.put(
       reply.body = body;
       await comment.save();
       
-      // --- FIXED: Simplified response ---
       res.json(reply);
     } catch (err) {
       res.status(500).json({ message: "Server error" });

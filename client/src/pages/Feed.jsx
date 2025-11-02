@@ -1,12 +1,25 @@
 // client/src/pages/Feed.jsx
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import api from "../api";
+import React, { useEffect, useState } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom'; // Import useNavigate
+import api from '../api';
+import { 
+  Container, 
+  Typography, 
+  Button, 
+  Box, 
+  TextField, 
+  Card, 
+  CardContent, 
+  CardActionArea,
+  CircularProgress, 
+  Link
+} from '@mui/material'; // Import MUI components
 
 export default function Feed() {
   const [reports, setReports] = useState([]);
-  const [search, setSearch] = useState(""); // <-- State for the search input
-  const [isLoading, setIsLoading] = useState(false); // <-- For user feedback
+  const [search, setSearch] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const nav = useNavigate(); // Use navigate for the "Create Report" button
 
   // Fetch all reports when the page first loads
   useEffect(() => {
@@ -14,125 +27,127 @@ export default function Feed() {
   }, []);
 
   // Updated function to handle both all reports AND searches
-  const fetchReports = async (searchTerm = "") => {
+  const fetchReports = async (searchTerm = '') => {
     setIsLoading(true);
-    let url = "/api/reports";
+    let url = '/api/reports';
 
     if (searchTerm) {
-      // If we have a search term, add it as a query parameter
       url = `/api/reports?q=${encodeURIComponent(searchTerm)}`;
     }
-
+    
     try {
       const res = await api(url);
-
+      
       if (Array.isArray(res)) {
         setReports(res);
       } else {
-        console.error("Failed to fetch reports:", res.message);
+        console.error('Failed to fetch reports:', res.message);
         setReports([]);
       }
     } catch (err) {
-      console.error("Error fetching reports:", err);
+      console.error('Error fetching reports:', err);
       setReports([]);
     }
     setIsLoading(false);
   };
 
-  // --- NEW: Handler for submitting the search ---
   const handleSearchSubmit = (e) => {
-    e.preventDefault(); // Stop the form from reloading the page
-    fetchReports(search); // Call fetchReports with the current search term
+    e.preventDefault(); 
+    fetchReports(search);
   };
 
-  // --- NEW: Handler to clear the search ---
   const handleClearSearch = () => {
-    setSearch("");
-    fetchReports(""); // Call fetchReports with an empty term to get all reports
+    setSearch('');
+    fetchReports(''); 
   };
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
-      <h2>Recent Reports</h2>
-      <Link to="/new">Create report</Link>
+    // Container centers your content and adds padding
+    <Container maxWidth="md" sx={{ mt: 4 }}> {/* mt: 4 means "margin-top: 32px" */}
+      
+      {/* Header and "Create Report" button */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Recent Reports
+        </Typography>
+        <Button variant="contained" color="primary" onClick={() => nav('/new')}>
+          Create Report
+        </Button>
+      </Box>
 
-      {/* --- NEW: SEARCH BAR --- */}
-      <form
-        onSubmit={handleSearchSubmit}
-        style={{ margin: "20px 0", display: "flex", gap: "8px" }}
+      {/* Search Bar */}
+      <Box 
+        component="form" 
+        onSubmit={handleSearchSubmit} 
+        sx={{ display: 'flex', gap: '8px', mb: 4 }}
       >
-        <input
-          type="text"
+        <TextField
+          fullWidth
+          variant="outlined"
           placeholder="Search report titles and content..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ padding: "8px", flex: 1, fontSize: "16px" }}
         />
-        <button type="submit" style={{ padding: "8px 12px" }}>
-          Search
-        </button>
-        <button
-          type="button"
-          onClick={handleClearSearch}
-          style={{ padding: "8px 12px" }}
-        >
-          Clear
-        </button>
-      </form>
-      {/* --- END OF SEARCH BAR --- */}
+        <Button type="submit" variant="contained">Search</Button>
+        <Button type="button" variant="outlined" onClick={handleClearSearch}>Clear</Button>
+      </Box>
 
-      <div>
+      {/* Reports List */}
+      <Box>
         {isLoading ? (
-          <p>Loading...</p>
+          // Show a nice loading spinner in the center
+          <Box sx={{ display: 'flex', justifyContent: 'center', my: 10 }}>
+            <CircularProgress />
+          </Box>
         ) : (
           <>
-            {reports.length === 0 && <p>No reports found.</p>}
+            {reports.length === 0 && <Typography>No reports found.</Typography>}
 
-            {reports.map((r) => (
-              <Link
+            {/* Map over reports and create a Card for each */}
+            {reports.map(r => (
+              // CardActionArea makes the whole card clickable
+              <CardActionArea 
+                key={r._id} 
+                component={RouterLink} 
                 to={`/report/${r._id}`}
-                key={r._id}
-                style={{ textDecoration: "none", color: "inherit" }}
+                sx={{ display: 'block' }}
               >
-                <article
-                  style={{
-                    border: "1px solid #ddd",
-                    padding: 10,
-                    marginTop: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  <h3>{r.title || "Experience"}</h3>
-                  <small>
-                    {r.university?.name} •{" "}
-                    {new Date(r.createdAt).toLocaleString()}
-                  </small>
-                  <p>
-                    {r.anonymous
-                      ? "Posted anonymously"
-                      : r.author
-                      ? r.author.isStudent
-                        ? r.author.name // If they are a student, show their name
-                        : `A ${r.author.profession || "Public Member"}` // If not a student, show "A (Profession)"
-                      : "Unknown"}
-                  </p>
-                  <p
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      display: "-webkit-box",
+                <Card sx={{ mb: 2 }}> {/* mb: 2 means "margin-bottom: 16px" */}
+                  <CardContent>
+                    <Typography variant="h5" component="h3">
+                      {r.title || 'Experience'}
+                    </Typography>
+                    
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {r.university?.name} • {new Date(r.createdAt).toLocaleString()}
+                    </Typography>
+                    
+                    <Typography variant="body1" sx={{ fontStyle: 'italic', color: '#555' }}>
+                      {r.anonymous
+                        ? "Posted anonymously"
+                        : r.author
+                          ? r.author.isStudent
+                            ? r.author.name
+                            : `A ${r.author.profession || 'Public Member'}`
+                          : "Unknown"}
+                    </Typography>
+                    
+                    <Typography variant="body1" sx={{ mt: 1, 
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
                       WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                    }}
-                  >
-                    {r.body}
-                  </p>
-                </article>
-              </Link>
+                      WebkitBoxOrient: 'vertical'
+                    }}>
+                      {r.body}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </CardActionArea>
             ))}
           </>
         )}
-      </div>
-    </div>
+      </Box>
+    </Container>
   );
 }

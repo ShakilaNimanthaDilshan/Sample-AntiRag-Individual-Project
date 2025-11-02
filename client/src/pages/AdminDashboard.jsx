@@ -1,56 +1,53 @@
 // client/src/pages/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import {
+  Container,
+  Typography,
+  Paper,
+  Box,
+  Button,
+  Select,
+  MenuItem,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+} from '@mui/material';
 
 export default function AdminDashboard() {
   const [pending, setPending] = useState([]);
   const [approved, setApproved] = useState([]);
-  const [flaggedReports, setFlaggedReports] = useState([]); // <-- ADDED THIS
+  const [flaggedReports, setFlaggedReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [mergeTargets, setMergeTargets] = useState({}); // { badId: 'goodIdToMergeInto' }
+  const [mergeTargets, setMergeTargets] = useState({});
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // --- MODIFIED: Added flaggedRes ---
       const [pendingRes, approvedRes, flaggedRes] = await Promise.all([
         api('/api/admin/universities/pending'),
-        api('/api/universities'), // Get all approved unis
-        api('/api/admin/flagged-reports') // <-- ADDED THIS
+        api('/api/universities'),
+        api('/api/admin/flagged-reports')
       ]);
 
-      // --- THIS IS THE FIX ---
-      if (Array.isArray(pendingRes)) {
-        setPending(pendingRes);
-      } else {
-        console.error("Failed to fetch pending universities:", pendingRes?.message);
-        setPending([]); // Set to empty array on error
-      }
+      if (Array.isArray(pendingRes)) setPending(pendingRes);
+      else setPending([]);
       
-      if (Array.isArray(approvedRes)) {
-        // Filter out pending unis from the "approved" list
-        setApproved(approvedRes.filter(u => u.status !== 'pending'));
-      } else {
-        console.error("Failed to fetch universities:", approvedRes?.message);
-        setApproved([]); // Set to empty array on error
-      }
-      // --- END OF FIX ---
-
-      // --- ADDED THIS BLOCK ---
-      if (Array.isArray(flaggedRes)) {
-        setFlaggedReports(flaggedRes);
-      } else {
-        console.error("Failed to fetch flagged reports:", flaggedRes?.message);
-        setFlaggedReports([]);
-      }
-      // --- END OF ADDED BLOCK ---
+      if (Array.isArray(approvedRes)) setApproved(approvedRes.filter(u => u.status !== 'pending'));
+      else setApproved([]);
+      
+      if (Array.isArray(flaggedRes)) setFlaggedReports(flaggedRes);
+      else setFlaggedReports([]);
 
     } catch (err) {
       console.error("Failed to fetch data", err);
-      // Reset state on a major error
       setPending([]);
       setApproved([]);
-      setFlaggedReports([]); // <-- ADDED THIS
+      setFlaggedReports([]);
     }
     setLoading(false);
   };
@@ -64,7 +61,7 @@ export default function AdminDashboard() {
     try {
       await api(`/api/admin/universities/approve/${id}`, { method: 'PUT' });
       alert('Approved!');
-      fetchData(); // Refresh lists
+      fetchData();
     } catch (err) {
       alert('Failed to approve');
     }
@@ -75,7 +72,6 @@ export default function AdminDashboard() {
     if (!goodId) return alert('Please select a university to merge into.');
 
     const goodUni = approved.find(u => u._id === goodId);
-    // Add a check in case the pending uni name isn't found (it shouldn't happen, but safe)
     const badUniName = pending.find(p => p._id === badId)?.name || 'the selected university';
 
     if (!window.confirm(`Are you sure you want to merge "${badUniName}" into "${goodUni.name}"? This cannot be undone.`)) return;
@@ -86,7 +82,7 @@ export default function AdminDashboard() {
         body: { badId, goodId }
       });
       alert('Merge successful!');
-      fetchData(); // Refresh lists
+      fetchData();
     } catch (err) {
       alert('Merge failed. See console.');
       console.error(err);
@@ -100,13 +96,12 @@ export default function AdminDashboard() {
     }));
   };
 
-  // --- ADDED THESE NEW HANDLERS ---
   const handleDismissFlags = async (reportId) => {
     if (!window.confirm('Are you sure you want to dismiss the flags for this report?')) return;
     try {
       await api(`/api/admin/dismiss-flags/${reportId}`, { method: 'PUT' });
       alert('Flags dismissed!');
-      fetchData(); // Refresh all data
+      fetchData();
     } catch (err) {
       alert('Failed to dismiss flags');
     }
@@ -115,115 +110,145 @@ export default function AdminDashboard() {
   const handleDeleteReport = async (reportId) => {
     if (!window.confirm('Are you sure you want to permanently DELETE this report?')) return;
     try {
-      // Use the admin delete route we built before
       await api(`/api/reports/${reportId}`, { method: 'DELETE' });
       alert('Report deleted!');
-      fetchData(); // Refresh all data
+      fetchData();
     } catch (err) {
       alert('Failed to delete report');
     }
   };
-  // --- END OF ADDED HANDLERS ---
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <Container sx={{ textAlign: 'center', mt: 10 }}>
+        <CircularProgress />
+        <Typography>Loading Dashboard...</Typography>
+      </Container>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <h2>Admin Dashboard</h2>
-      <h3>Pending Universities ({pending.length})</h3>
+    <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Admin Dashboard
+      </Typography>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#f4f4f4' }}>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Pending Name</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pending.length === 0 && (
-            <tr>
-              <td colSpan="2" style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>
-                No pending universities.
-              </td>
-            </tr>
-          )}
-          {pending.map(uni => (
-            <tr key={uni._id}>
-              <td style={{ padding: 8, border: '1px solid #ddd' }}>{uni.name}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd', display: 'flex', gap: '10px' }}>
+      {/* --- PENDING UNIVERSITIES --- */}
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 4 }, mb: 4 }}>
+        <Typography variant="h5" component="h2" gutterBottom>
+          Pending Universities ({pending.length})
+        </Typography>
+        <TableContainer>
+          <Table>
+            <TableHead sx={{ background: '#f4f4f4' }}>
+              <TableRow>
+                <TableCell>Pending Name</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pending.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={2} align="center">
+                    No pending universities.
+                  </TableCell>
+                </TableRow>
+              )}
+              {pending.map(uni => (
+                <TableRow key={uni._id}>
+                  <TableCell>{uni.name}</TableCell>
+                  <TableCell sx={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <Button 
+                      variant="contained" 
+                      color="success" 
+                      size="small"
+                      onClick={() => handleApprove(uni._id)}
+                    >
+                      Approve
+                    </Button>
+                    <Box sx={{ display: 'flex', gap: '5px' }}>
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel>Merge into...</InputLabel>
+                        <Select
+                          value={mergeTargets[uni._id] || ''}
+                          onChange={(e) => handleMergeTargetChange(uni._id, e.target.value)}
+                          label="Merge into..."
+                        >
+                          {approved.map(aUni => (
+                            <MenuItem key={aUni._id} value={aUni._id}>{aUni.name}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        onClick={() => handleMerge(uni._id)}
+                        disabled={!mergeTargets[uni._id]}
+                      >
+                        Merge
+                      </Button>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-                <button onClick={() => handleApprove(uni._id)} style={{ background: 'lightgreen' }}>
-                  Approve
-                </button>
-
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <select 
-                    value={mergeTargets[uni._id] || ''} 
-                    onChange={(e) => handleMergeTargetChange(uni._id, e.target.value)}
-                  >
-                    <option value="" disabled>-- Merge into... --</option>
-                    {approved.map(aUni => (
-                      <option key={aUni._id} value={aUni._id}>{aUni.name}</option>
-                    ))}
-                  </select>
-                  <button 
-                    onClick={() => handleMerge(uni._id)} 
-                    disabled={!mergeTargets[uni._id]}
-                    style={{ background: 'lightblue' }}
-                  >
-                    Merge
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* --- ADDED THIS ENTIRE NEW TABLE --- */}
-      <h3 style={{ marginTop: '40px' }}>Flagged Content ({flaggedReports.length})</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#f4f4f4' }}>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Report Content</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Author</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Flags</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {flaggedReports.length === 0 && (
-            <tr>
-              <td colSpan="4" style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>
-                No flagged reports.
-              </td>
-            </tr>
-          )}
-          {flaggedReports.map(report => (
-            <tr key={report._id}>
-              <td style={{ padding: 8, border: '1px solid #ddd' }}>{report.body.substring(0, 150)}...</td>
-              <td style={{ padding: 8, border: '1px solid #ddd' }}>{report.author?.name || 'Unknown'}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd', textAlign: 'center' }}>{report.flags.length}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd', display: 'flex', gap: '10px' }}>
-                <button 
-                  onClick={() => handleDismissFlags(report._id)} 
-                  style={{ background: 'lightblue' }}
-                >
-                  Dismiss Flags
-                </button>
-                <button 
-                  onClick={() => handleDeleteReport(report._id)} 
-                  style={{ background: 'red', color: 'white' }}
-                >
-                  Delete Report
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {/* --- END OF NEW TABLE --- */}
-      
-    </div>
+      {/* --- FLAGGED CONTENT --- */}
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 4 } }}>
+        <Typography variant="h5" component="h2" gutterBottom>
+          Flagged Content ({flaggedReports.length})
+        </Typography>
+        <TableContainer>
+          <Table>
+            <TableHead sx={{ background: '#f4f4f4' }}>
+              <TableRow>
+                <TableCell>Report Content</TableCell>
+                <TableCell>Author</TableCell>
+                <TableCell align="center">Flags</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {flaggedReports.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} align="center">
+                    No flagged reports.
+                  </TableCell>
+                </TableRow>
+              )}
+              {flaggedReports.map(report => (
+                <TableRow key={report._id}>
+                  <TableCell>{report.body.substring(0, 150)}...</TableCell>
+                  <TableCell>{report.author?.name || 'Unknown'}</TableCell>
+                  <TableCell align="center">{report.flags.length}</TableCell>
+                  <TableCell sx={{ display: 'flex', gap: '10px' }}>
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      size="small"
+                      onClick={() => handleDismissFlags(report._id)}
+                    >
+                      Dismiss Flags
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      size="small"
+                      onClick={() => handleDeleteReport(report._id)}
+                    >
+                      Delete Report
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+    </Container>
   );
 }

@@ -1,13 +1,28 @@
 // client/src/pages/ModerationQueue.jsx
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // <-- Import useNavigate
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import api from '../api';
+import {
+  Container,
+  Typography,
+  Paper,
+  Box,
+  Button,
+  CircularProgress,
+  Card,
+  CardActionArea,
+  CardContent,
+  Divider,
+} from '@mui/material';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 export default function ModerationQueue() {
   const [reports, setReports] = useState([]);
-  const [caseFiles, setCaseFiles] = useState([]); // <-- ADDED
+  const [caseFiles, setCaseFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const nav = useNavigate(); // <-- ADDED
+  const nav = useNavigate();
 
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -17,17 +32,12 @@ export default function ModerationQueue() {
         api('/api/case-files') // Get all case files for management
       ]);
       
-      if (Array.isArray(reportRes)) {
-        setReports(reportRes);
-      } else {
-        setReports([]);
-      }
+      if (Array.isArray(reportRes)) setReports(reportRes);
+      else setReports([]);
       
-      if (Array.isArray(caseRes)) {
-        setCaseFiles(caseRes);
-      } else {
-        setCaseFiles([]);
-      }
+      if (Array.isArray(caseRes)) setCaseFiles(caseRes);
+      else setCaseFiles([]);
+
     } catch (err) {
       console.error('Error fetching data:', err);
       setReports([]);
@@ -40,7 +50,6 @@ export default function ModerationQueue() {
     fetchAllData();
   }, []);
 
-  // --- ADDED: Delete handler for Case Files ---
   const handleDeleteCaseFile = async (id) => {
     if (!window.confirm('Are you sure you want to delete this case file?')) return;
     try {
@@ -52,53 +61,99 @@ export default function ModerationQueue() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <Container sx={{ textAlign: 'center', mt: 10 }}>
+        <CircularProgress />
+        <Typography>Loading Moderation Queue...</Typography>
+      </Container>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+    <Container maxWidth="md" sx={{ mt: 4 }}>
       
-      {/* --- NEW SECTION: Case File Management --- */}
-      <h2>Manage Documented Cases</h2>
-      <Link to="/admin/case-files/new">
-        <button style={{ background: 'green', color: 'white', padding: '8px 12px' }}>
-          + Create New Case File
-        </button>
-      </Link>
-      <div style={{ marginTop: '15px' }}>
-        {isLoading ? <p>Loading cases...</p> : (
-          caseFiles.map(item => (
-            <div key={item._id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', border: '1px solid #eee' }}>
-              <span>{item.title}</span>
-              <div>
-                <button onClick={() => nav(`/admin/case-files/edit/${item._id}`)} style={{ marginRight: '8px' }}>
+      {/* --- Case File Management --- */}
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 4 }, mb: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Manage Documented Cases
+        </Typography>
+        <Button 
+          variant="contained" 
+          color="success" 
+          startIcon={<AddCircleOutlineIcon />}
+          onClick={() => nav('/admin/case-files/new')}
+          sx={{ mb: 2 }}
+        >
+          Create New Case File
+        </Button>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {caseFiles.length === 0 && <Typography>No case files created yet.</Typography>}
+          {caseFiles.map(item => (
+            <Paper 
+              key={item._id} 
+              variant="outlined" 
+              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5 }}
+            >
+              <Typography>{item.title}</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button 
+                  size="small" 
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={() => nav(`/admin/case-files/edit/${item._id}`)}
+                >
                   Edit
-                </button>
-                <button onClick={() => handleDeleteCaseFile(item._id)} style={{ background: 'red', color: 'white' }}>
+                </Button>
+                <Button 
+                  size="small" 
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => handleDeleteCaseFile(item._id)}
+                >
                   Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      {/* --- END OF NEW SECTION --- */}
+                </Button>
+              </Box>
+            </Paper>
+          ))}
+        </Box>
+      </Paper>
+      
+      <Divider sx={{ my: 4 }} /> {/* my: 4 means margin-top and margin-bottom */}
 
-      <hr style={{ margin: '40px 0' }} />
-
-      <h2>Private Report Queue</h2>
-      <p>This page shows all non-public reports submitted for your review.</p>
-
-      <div>
-        {isLoading ? (
-          <p>Loading reports...</p>
+      {/* --- Private Report Queue --- */}
+      <Box>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Private Report Queue
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+          This page shows all non-public reports submitted for your review.
+        </Typography>
+        
+        {reports.length === 0 ? (
+          <Typography>The moderation queue is empty.</Typography>
         ) : (
-          <>
-            {reports.length === 0 && <p>The moderation queue is empty.</p>}
-            {reports.map(r => (
-              <Link to={`/report/${r._id}`} key={r._id} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <article style={{ border: '1px solid #ddd', padding: 10, marginTop: 10, cursor: 'pointer', background: '#fffbeb' }}>
-                  <h3>{r.title || 'Experience'}</h3>
-                  <small>{r.university?.name} • {new Date(r.createdAt).toLocaleString()}</small>
-                  <p>{r.anonymous ? 'Posted anonymously' : (r.author?.name || 'Unknown')}</p>
-                  <p style={{
+          reports.map(r => (
+            // We re-use the same Card component from the Feed for consistency
+            <CardActionArea 
+              key={r._id} 
+              component={RouterLink} 
+              to={`/report/${r._id}`}
+              sx={{ display: 'block' }}
+            >
+              <Card sx={{ mb: 2, border: '1px solid orange', background: '#fffbeb' }}>
+                <CardContent>
+                  <Typography variant="h5" component="h3">
+                    {r.title || 'Experience'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {r.university?.name} • {new Date(r.createdAt).toLocaleString()}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontStyle: 'italic', color: '#555' }}>
+                    {r.anonymous ? 'Posted anonymously' : (r.author?.name || 'Unknown')}
+                  </Typography>
+                  <Typography variant="body1" sx={{ mt: 1, 
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     display: '-webkit-box',
@@ -106,13 +161,13 @@ export default function ModerationQueue() {
                     WebkitBoxOrient: 'vertical'
                   }}>
                     {r.body}
-                  </p>
-                </article>
-              </Link>
-            ))}
-          </>
+                  </Typography>
+                </CardContent>
+              </Card>
+            </CardActionArea>
+          ))
         )}
-      </div>
-    </div>
+      </Box>
+    </Container>
   );
 }

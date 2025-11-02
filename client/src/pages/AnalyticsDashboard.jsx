@@ -14,6 +14,21 @@ import {
 import io from 'socket.io-client';
 import api from '../api';
 
+// --- MUI Imports ---
+import {
+  Container,
+  Typography,
+  Paper,
+  Box,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+} from '@mui/material';
+import Grid from '@mui/material/Grid'; // <-- THIS IS THE FIX (Correct v2 import)
+// --- End MUI Imports ---
+
 // Register the components we need from Chart.js
 ChartJS.register(
   ArcElement,
@@ -39,22 +54,16 @@ export default function AnalyticsDashboard() {
     const processed = {};
     const universityNames = {};
 
-    // Check if data is an array before iterating
-    if (!Array.isArray(data)) {
-      console.error("processMonthlyData expected an array, but got:", data);
-      return { processed: {}, universityNames: {} };
-    }
+    if (!Array.isArray(data)) return { processed: {}, universityNames: {} };
 
     for (const item of data) {
       if (!processed[item.universityId]) {
         processed[item.universityId] = Array(12).fill(0); // Create an array for 12 months
         universityNames[item.universityId] = item.universityName;
       }
-      // Note: month is 1-indexed (1=Jan), so we subtract 1
       processed[item.universityId][item.month - 1] += item.count;
     }
     
-    // Set the first university as the default selection
     const firstUniId = Object.keys(universityNames)[0];
     if (firstUniId) {
       setSelectedUniversity(firstUniId);
@@ -73,7 +82,6 @@ export default function AnalyticsDashboard() {
         api('/api/analytics/reports-by-month')
       ]);
 
-      // --- 1. Set Pie Chart Data (FIXED) ---
       if (Array.isArray(pieRes) && pieRes.length > 0) {
         setPieData({
           labels: pieRes.map(d => d.name),
@@ -81,53 +89,42 @@ export default function AnalyticsDashboard() {
             label: '# of Reports',
             data: pieRes.map(d => d.count),
             backgroundColor: pieRes.map(() => getRandomColor()),
+            borderColor: '#fff',
+            borderWidth: 1,
           }]
         });
       } else {
-        // Handle error or empty response
-        console.warn("No data for pie chart or API error:", pieRes);
         setPieData(null);
       }
 
-      // --- 2. Set Monthly Bar Chart Data (FIXED) ---
       if (Array.isArray(monthRes) && monthRes.length > 0) {
         setMonthlyData(processMonthlyData(monthRes));
       } else {
-        // Handle error or empty response
-        console.warn("No data for bar chart or API error:", monthRes);
         setMonthlyData(null);
       }
 
     } catch (err) {
       console.error("Failed to fetch analytics", err);
-      // Reset state on a major error
       setPieData(null);
       setMonthlyData(null);
     }
     setLoading(false);
   };
 
-  // --- 3. REAL-TIME LOGIC ---
+  // REAL-TIME LOGIC
   useEffect(() => {
-    // Fetch data on initial page load
     fetchData();
-
-    // Connect to the WebSocket server
-    const socket = io('http://localhost:5000'); // Your backend URL
-
-    // Listen for the 'analytics_updated' event
+    const socket = io('http://localhost:5000');
     socket.on('analytics_updated', () => {
       console.log('Real-time update received!');
-      fetchData(); // Re-fetch all data when a new report is posted
+      fetchData();
     });
-
-    // Disconnect socket on cleanup
     return () => {
       socket.disconnect();
     };
-  }, []); // Empty array means this runs once on mount
+  }, []);
 
-  // --- 4. Prepare data for the Bar Chart ---
+  // Prepare data for the Bar Chart
   const barChartData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     datasets: [{
@@ -136,40 +133,79 @@ export default function AnalyticsDashboard() {
       backgroundColor: 'rgba(53, 162, 235, 0.5)',
     }]
   };
+  
+  const barChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      title: {
+        display: true,
+        text: monthlyData?.universityNames[selectedUniversity] || 'Monthly Reports',
+      },
+    },
+  };
+
+  if (loading) {
+    return (
+      <Container sx={{ textAlign: 'center', mt: 10 }}>
+        <CircularProgress />
+        <Typography>Loading Analytics...</Typography>
+      </Container>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: 20 }}>
-      <h2>Analytics Dashboard</h2>
-      <p style={{ color: '#555' }}>These charts update in real-time when new reports are submitted.</p>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Analytics Dashboard
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        These charts update in real-time when new reports are submitted.
+      </Typography>
 
-      {loading && <p>Loading charts...</p>}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
-        
+      <Grid container spacing={3}>
         {/* PIE CHART */}
-        <div style={{ flex: 1, minWidth: '300px', maxWidth: '400px', background: '#f9f9f9', padding: '15px', borderRadius: '8px' }}>
-          <h3>Reports by University</h3>
-          {pieData ? <Pie data={pieData} /> : <p>No data to display.</p>}
-        </div>
+        {/* --- FIX: Removed the "item" prop --- */}
+        <Grid xs={12} md={5} lg={4}>
+          <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, height: '100%' }}>
+            <Typography variant="h6" component="h2" align="center" gutterBottom>
+              Reports by University
+            </Typography>
+            <Box sx={{ height: 350, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {pieData ? <Pie data={pieData} options={{ responsive: true, maintainAspectRatio: false }} /> : <Typography>No data to display.</Typography>}
+            </Box>
+          </Paper>
+        </Grid>
 
         {/* BAR CHART */}
-        <div style={{ flex: 2, minWidth: '400px', background: '#f9f9f9', padding: '15px', borderRadius: '8px' }}>
-          <h3>Monthly Reports per University</h3>
-          
-          <select 
-            value={selectedUniversity}
-            onChange={(e) => setSelectedUniversity(e.target.value)}
-            style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-          >
-            <option value="" disabled>-- Select a University --</option>
-            {monthlyData && monthlyData.universityNames && Object.entries(monthlyData.universityNames).map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
-
-          {selectedUniversity ? <Bar data={barChartData} /> : <p>Please select a university to see monthly data.</p>}
-        </div>
-      </div>
-    </div>
+        {/* --- FIX: Removed the "item" prop --- */}
+        <Grid xs={12} md={7} lg={8}>
+          <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, height: '100%' }}>
+            <Typography variant="h6" component="h2" align="center" gutterBottom>
+              Monthly Reports per University
+            </Typography>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel id="uni-select-label">Select a University</InputLabel>
+              <Select
+                labelId="uni-select-label"
+                label="Select a University"
+                value={selectedUniversity}
+                onChange={(e) => setSelectedUniversity(e.target.value)}
+              >
+                <MenuItem value="" disabled>-- Select a University --</MenuItem>
+                {monthlyData && monthlyData.universityNames && Object.entries(monthlyData.universityNames).map(([id, name]) => (
+                  <MenuItem key={id} value={id}>{name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {selectedUniversity ? <Bar options={barChartOptions} data={barChartData} /> : <Typography>Please select a university.</Typography>}
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Container>
   );
 }

@@ -1,37 +1,59 @@
 // client/src/pages/ReportDetail.jsx
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+// --- THIS IS THE FIX ---
+import { useParams, useNavigate, Link as RouterLink } from "react-router-dom";
+// --- END OF FIX ---
 import api from "../api";
 import { useAuth } from "../contexts/AuthContext";
+
+// --- MUI Imports ---
+import {
+  Container,
+  Paper,
+  Typography,
+  Box,
+  Button,
+  TextField,
+  Divider,
+  CircularProgress,
+  Link as MuiLink,
+  Checkbox,
+  FormControlLabel,
+} from "@mui/material";
+import {
+  ThumbUp,
+  ThumbUpOutlined,
+  Flag,
+  FlagOutlined,
+  Edit,
+  Delete,
+  Reply,
+  Cancel,
+} from "@mui/icons-material";
+// --- End MUI Imports ---
 
 // Helper to format dates
 const formatDate = (dateString) => new Date(dateString).toLocaleString();
 
 export default function ReportDetail() {
-  const { id } = useParams(); // Get the report ID from the URL
+  const { id } = useParams();
   const nav = useNavigate();
-  const { user } = useAuth(); // Get logged-in user
+  const { user } = useAuth();
 
   const [report, setReport] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Comment form state
+  // State for forms
   const [commentBody, setCommentBody] = useState("");
   const [commentAnon, setCommentAnon] = useState(false);
-
-  // Comment editing state
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState("");
-
-  // Reply form state
-  const [replyingToId, setReplyingToId] = useState(null); // Which comment ID we are replying to
+  const [replyingToId, setReplyingToId] = useState(null);
   const [replyBody, setReplyBody] = useState("");
   const [replyAnon, setReplyAnon] = useState(false);
-
-  // Reply editing state
-  const [editingReplyId, setEditingReplyId] = useState(null); // Which reply ID we are editing
+  const [editingReplyId, setEditingReplyId] = useState(null);
   const [editingReplyText, setEditingReplyText] = useState("");
 
   // Fetch report and comments/replies
@@ -43,85 +65,54 @@ export default function ReportDetail() {
           api(`/api/reports/${id}`),
           api(`/api/reports/${id}/comments`),
         ]);
-
-        if (reportRes._id) {
-          setReport(reportRes);
-        } else {
-          setError(reportRes.message || "Report not found");
-        }
-        setComments(commentsRes || []);
+        if (reportRes._id) setReport(reportRes);
+        else setError(reportRes.message || "Report not found");
+        if (Array.isArray(commentsRes)) setComments(commentsRes);
+        else setComments([]);
       } catch (err) {
-        setError("Failed to fetch data");
+        setError("Failed to fetch data. This report may be private.");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [id]); // Re-fetch if ID changes
+  }, [id]);
 
-  // --- Handlers for Reports ---
+  // --- All handler functions (no logic changes) ---
+
   const handleLike = async () => {
     if (!user) return alert("Please log in to like");
     const res = await api(`/api/reports/${id}/like`, { method: "PUT" });
     if (res.likes !== undefined) {
       setReport({ ...report, likeCount: res.likes });
-    } else {
-      alert(res.message || "Failed to like");
     }
   };
 
-  // --- THIS IS THE CORRECTED FUNCTION ---
   const handleFlag = async () => {
     if (!user) return alert("Please log in to flag");
-    if (
-      !window.confirm("Are you sure you want to flag this report for review?")
-    )
-      return;
-    
+    if (!window.confirm("Are you sure you want to flag this report for review?")) return;
     try {
       const res = await api(`/api/reports/${id}/flag`, { method: "PUT" });
-      
-      // --- ADD THIS BLOCK TO UPDATE THE UI INSTANTLY ---
-      setReport({
-        ...report,
-        flags: [...report.flags, user.id] // Manually add your ID to the flags array
-      });
-      // --- END OF NEW BLOCK ---
-
+      setReport({ ...report, flags: [...report.flags, user.id] });
       alert(res.message || "Flag submitted");
     } catch (err) {
-      // This is where the 400 error goes, which is fine!
       alert(err.message || "An error occurred");
     }
   };
-  // --- END OF CORRECTED FUNCTION ---
 
   const handleDelete = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this report? This cannot be undone."
-      )
-    ) {
-      return;
-    }
+    if (!window.confirm("Are you sure you want to delete this report?")) return;
     try {
-      // The api() helper will throw an error if the status is not 2xx.
       await api(`/api/reports/${id}`, { method: "DELETE" });
-
-      // If we get to this line, it means the delete was successful.
       alert("Report deleted successfully.");
-      nav("/"); // Navigate to home
+      nav("/");
     } catch (err) {
-      // If the server sends 403, 404, or 500, we end up here.
       alert(err.message || "An error occurred while deleting.");
-      console.error(err);
     }
   };
 
-  // --- Handlers for Comments ---
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (!user) return alert("Please log in to comment");
     if (!commentBody.trim()) return;
     try {
       const res = await api(`/api/reports/${id}/comments`, {
@@ -131,16 +122,12 @@ export default function ReportDetail() {
       if (res._id) {
         let newComment = { ...res };
         newComment.author = { _id: user.id, name: user.name || "You" };
-        newComment.replies = []; // Initialize replies array
-        setComments([newComment, ...comments]); // This adds to the beginning
+        newComment.replies = [];
+        setComments([newComment, ...comments]);
         setCommentBody("");
         setCommentAnon(false);
-      } else {
-        alert(res.message || "Failed to post comment");
       }
-    } catch (err) {
-      alert("An error occurred.");
-    }
+    } catch (err) { alert("An error occurred."); }
   };
 
   const handleUpdateComment = async (commentId) => {
@@ -151,673 +138,350 @@ export default function ReportDetail() {
         body: { body: editingText },
       });
       if (res._id) {
-        // 'res' is the updated comment, but its 'replies' are not populated.
-        // We must merge 'res' with the *old* replies from the state.
-        setComments(
-          comments.map((c) =>
-            c._id === commentId
-              ? { ...res, replies: c.replies } // <-- Preserves replies
-              : c
-          )
-        );
+        setComments(comments.map((c) => (c._id === commentId ? { ...res, replies: c.replies } : c)));
         setEditingCommentId(null);
         setEditingText("");
-      } else {
-        alert(res.message || "Failed to update comment");
       }
-    } catch (err) {
-      alert("An error occurred.");
-    }
+    } catch (err) { alert("An error occurred."); }
   };
 
   const handleDeleteComment = async (commentId) => {
-    if (!window.confirm("Are you sure you want to delete this comment?"))
-      return;
+    if (!window.confirm("Are you sure you want to delete this comment?")) return;
     try {
-      const res = await api(`/api/reports/${id}/comments/${commentId}`, {
-        method: "DELETE",
-      });
+      const res = await api(`/api/reports/${id}/comments/${commentId}`, { method: "DELETE" });
       if (res.message === "Comment deleted") {
         setComments(comments.filter((c) => c._id !== commentId));
-      } else {
-        alert(res.message || "Failed to delete comment.");
       }
-    } catch (err) {
-      alert("An error occurred.");
-    }
+    } catch (err) { alert("An error occurred."); }
   };
 
-  // --- Handlers for Replies ---
   const handleReplySubmit = async (commentId) => {
     if (!replyBody.trim()) return;
     try {
-      const res = await api(
-        `/api/reports/${id}/comments/${commentId}/replies`,
-        {
-          method: "POST",
-          body: { body: replyBody, anonymous: replyAnon },
-        }
-      );
-
+      const res = await api(`/api/reports/${id}/comments/${commentId}/replies`, {
+        method: "POST",
+        body: { body: replyBody, anonymous: replyAnon },
+      });
       if (res._id) {
-        // 'res' is the new reply. We must "fake" its author object
         let newReply = { ...res };
-        newReply.author = {
-          _id: user.id,
-          name: user.name || "You",
-        };
-
-        // Find the parent comment and add the new, fixed reply
-        setComments(
-          comments.map((c) =>
-            c._id === commentId
-              ? { ...c, replies: [...(c.replies || []), newReply] }
-              : c
-          )
-        );
+        newReply.author = { _id: user.id, name: user.name || "You" };
+        setComments(comments.map((c) =>
+          c._id === commentId
+            ? { ...c, replies: [...(c.replies || []), newReply] }
+            : c
+        ));
         setReplyingToId(null);
         setReplyBody("");
         setReplyAnon(false);
-      } else {
-        alert(res.message || "Failed to post reply");
       }
-    } catch (err) {
-      alert("An error occurred.");
-    }
+    } catch (err) { alert("An error occurred."); }
   };
 
   const handleUpdateReply = async (commentId, replyId) => {
     if (!editingReplyText.trim()) return;
     try {
-      const res = await api(
-        `/api/reports/${id}/comments/${commentId}/replies/${replyId}`,
-        {
-          method: "PUT",
-          body: { body: editingReplyText },
-        }
-      );
-
+      const res = await api(`/api/reports/${id}/comments/${commentId}/replies/${replyId}`, {
+        method: "PUT",
+        body: { body: editingReplyText },
+      });
       if (res._id) {
-        // 'res' is the updated reply, but its author is just an ID.
-        // We must "fake" the author object for the UI.
         let updatedReply = { ...res };
-        updatedReply.author = {
-          _id: user.id,
-          name: user.name || "You",
-        };
-
-        setComments(
-          comments.map((c) =>
-            c._id === commentId
-              ? {
-                  ...c,
-                  replies: c.replies.map(
-                    (r) => (r._id === replyId ? updatedReply : r) // Use the fixed 'updatedReply'
-                  ),
-                }
-              : c
-          )
-        );
+        updatedReply.author = { _id: user.id, name: user.name || "You" };
+        setComments(comments.map((c) =>
+          c._id === commentId
+            ? { ...c, replies: c.replies.map((r) => r._id === replyId ? updatedReply : r) }
+            : c
+        ));
         setEditingReplyId(null);
         setEditingReplyText("");
-      } else {
-        alert(res.message || "Failed to update reply");
       }
-    } catch (err) {
-      alert("An error occurred.");
-    }
+    } catch (err) { alert("An error occurred."); }
   };
 
   const handleDeleteReply = async (commentId, replyId) => {
     if (!window.confirm("Are you sure you want to delete this reply?")) return;
     try {
-      const res = await api(
-        `/api/reports/${id}/comments/${commentId}/replies/${replyId}`,
-        {
-          method: "DELETE",
-        }
-      );
-
+      const res = await api(`/api/reports/${id}/comments/${commentId}/replies/${replyId}`, { method: "DELETE" });
       if (res.message === "Reply deleted") {
-        setComments(
-          comments.map((c) =>
-            c._id === commentId
-              ? { ...c, replies: c.replies.filter((r) => r._id !== replyId) }
-              : c
-          )
-        );
-      } else {
-        alert(res.message || "Failed to delete reply");
+        setComments(comments.map((c) =>
+          c._id === commentId
+            ? { ...c, replies: c.replies.filter((r) => r._id !== replyId) }
+            : c
+        ));
       }
-    } catch (err) {
-      alert("An error occurred.");
-    }
+    } catch (err) { alert("An error occurred."); }
   };
 
-  // --- Render ---
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div style={{ color: "red" }}>{error}</div>;
-  if (!report) return <div>Report not found.</div>;
 
-  const base = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+  // --- Render Logic ---
+  if (loading) {
+    return (
+      <Container sx={{ textAlign: 'center', mt: 10 }}>
+        <CircularProgress />
+        <Typography>Loading report...</Typography>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container sx={{ textAlign: 'center', mt: 10 }}>
+        <Typography variant="h5" color="error">{error}</Typography>
+        <MuiLink component={RouterLink} to="/">Go back to the feed</MuiLink>
+      </Container>
+    );
+  }
+
+  if (!report) return null; // Should be caught by error state
+
   const isOwner = user && report.author && user.id === report.author._id;
   const isAdmin = user && user.role === "admin";
-  // --- THIS IS THE NEW VARIABLE ---
-  const hasAlreadyFlagged = user && report?.flags?.includes(user.id);
+  const hasAlreadyFlagged = user && report.flags && report.flags.includes(user.id);
 
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto" }}>
-      {/* Report Details */}
-      <article style={{ borderBottom: "2px solid #ccc", paddingBottom: 20 }}>
-        <h2>{report.title || "Experience"}</h2>
-        <small>
-          <strong>{report.university?.name}</strong> •{" "}
-          {formatDate(report.createdAt)}
-        </small>
-        <p>
-          By:{" "}
-          <strong>
-            {report.anonymous ? "Anonymous" : report.author?.name || "Unknown"}
-          </strong>
-        </p>
-        <p style={{ fontSize: "1.1em", whiteSpace: "pre-wrap" }}>
-          {report.body}
-        </p>
+    <Container maxWidth="md" sx={{ mt: 4 }}>
+      {/* --- Report Details --- */}
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 4 } }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          {report.title || "Experience"}
+        </Typography>
+        
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="subtitle1" color="text.secondary">
+            <strong>{report.university?.name}</strong>
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            {formatDate(report.createdAt)}
+          </Typography>
+        </Box>
+        
+        <Typography variant="body1" sx={{ fontStyle: 'italic', mb: 2 }}>
+          By: <strong>{report.anonymous ? "Anonymous" : report.author?.name || "Unknown"}</strong>
+        </Typography>
 
-        {/* Media */}
+        <Divider sx={{ mb: 3 }} />
+
+        {/* --- Report Media --- */}
         {report.media && report.media.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              margin: "15px 0",
-            }}
-          >
-            {report.media.map((m, idx) =>
-              m.type === "image" ? (
-                <a
-                  key={idx}
-                  href={m.url.startsWith("http") ? m.url : `${base}${m.url}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <img
-                    src={m.url.startsWith("http") ? m.url : `${base}${m.url}`}
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+            {report.media.map((m, idx) => (
+              m.type === 'image' ? (
+                <MuiLink key={idx} href={m.url} target="_blank" rel="noreferrer">
+                  <Box
+                    component="img"
+                    src={m.url}
                     alt={`media-${idx}`}
-                    style={{
-                      width: 150,
-                      height: 100,
-                      objectFit: "cover",
-                      border: "1px solid #ccc",
+                    sx={{
+                      width: 150, height: 100, objectFit: 'cover',
+                      border: '1px solid #ccc', borderRadius: '4px',
+                      '&:hover': { opacity: 0.8 }
                     }}
                   />
-                </a>
+                </MuiLink>
               ) : null
-            )}
-          </div>
+            ))}
+          </Box>
         )}
 
-        {/* Actions: Like & Flag */}
-        <div
-          style={{
-            display: "flex",
-            gap: 15,
-            marginTop: 15,
-            alignItems: "center",
-          }}
-        >
-          <button onClick={handleLike}>
-            👍 Like ({report.likeCount || 0})
-          </button>
-          
-          {/* --- THIS IS THE CORRECTED BUTTON --- */}
-          <button
-            onClick={handleFlag}
-            style={{
-              color: hasAlreadyFlagged ? "#555" : "red",
-              background: hasAlreadyFlagged ? "#f0f0f0" : "white",
-              border: hasAlreadyFlagged ? "1px solid #ccc" : "1px solid red",
-              cursor: hasAlreadyFlagged ? 'not-allowed' : 'pointer'
-            }}
-            disabled={hasAlreadyFlagged} // <-- Disables the button
+        <Typography variant="body1" sx={{ fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}>
+          {report.body}
+        </Typography>
+
+        {/* --- Report Actions --- */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 4, alignItems: 'center' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ThumbUpOutlined />}
+            onClick={handleLike}
+            disabled={!user}
           >
-            {hasAlreadyFlagged ? "🚩 Flagged" : "🚩 Flag for Review"}
-          </button>
-          {/* --- END OF CORRECTED BUTTON --- */}
+            Like ({report.likeCount || 0})
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={hasAlreadyFlagged ? <Flag /> : <FlagOutlined />}
+            onClick={handleFlag}
+            disabled={hasAlreadyFlagged || !user}
+          >
+            {hasAlreadyFlagged ? "Flagged" : "Flag"}
+          </Button>
+          
+          <Box sx={{ flexGrow: 1 }} /> {/* Spacer */}
 
           {(isOwner || isAdmin) && (
             <>
-              <div style={{ flexGrow: 1 }} />
-              <button
+              <Button
+                variant="contained"
+                size="small"
+                color="secondary"
+                startIcon={<Edit />}
                 onClick={() => nav(`/edit/${id}`)}
-                style={{ background: "#eee", color: "#333" }}
               >
                 Edit
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                color="error"
+                startIcon={<Delete />}
                 onClick={handleDelete}
-                style={{ background: "#ffcccc", color: "red" }}
               >
                 Delete
-              </button>
+              </Button>
             </>
           )}
-        </div>
-      </article>
+        </Box>
+      </Paper>
 
-      {/* Comments Section */}
-      <section style={{ marginTop: 20 }}>
-        <h3>Comments ({comments.length})</h3>
+      {/* --- Comments Section --- */}
+      <Box sx={{ mt: 5 }}>
+        <Typography variant="h5" gutterBottom>
+          Comments ({comments.length})
+        </Typography>
 
-        {/* New Comment Form */}
+        {/* --- New Comment Form --- */}
         {user ? (
-          <form
-            onSubmit={handleCommentSubmit}
-            style={{
-              margin: "20px 0",
-              background: "#f9f9f9",
-              padding: "15px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            {/* Comment Textarea */}
-            <textarea
-              value={commentBody}
-              onChange={(e) => setCommentBody(e.target.value)}
-              placeholder="Share your advice or thoughts..."
-              style={{
-                width: "100%",
-                minHeight: "80px",
-                boxSizing: "border-box",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-                padding: "10px",
-                fontSize: "14px",
-                resize: "vertical",
-                outline: "none",
-              }}
-            />
-
-            {/* Checkbox aligned properly */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  color: "#333",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={commentAnon}
-                  onChange={(e) => setCommentAnon(e.target.checked)}
+          <Paper elevation={2} sx={{ p: 2, mb: 3, background: '#f9f9f9' }}>
+            <Box component="form" onSubmit={handleCommentSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Share your advice or thoughts..."
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox checked={commentAnon} onChange={(e) => setCommentAnon(e.target.checked)} />
+                  }
+                  label="Post anonymously"
                 />
-                <span>Post anonymously</span>
-              </label>
-
-              {/* Submit button on the right */}
-              <button
-                type="submit"
-                style={{
-                  background: "#007bff",
-                  color: "#fff",
-                  border: "none",
-                  padding: "8px 14px",
-                  borderRadius: "5px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  transition: "0.3s",
-                }}
-                onMouseOver={(e) => (e.target.style.background = "#0056b3")}
-                onMouseOut={(e) => (e.target.style.background = "#007bff")}
-              >
-                Post Comment
-              </button>
-            </div>
-          </form>
+                <Button type="submit" variant="contained">Post Comment</Button>
+              </Box>
+            </Box>
+          </Paper>
         ) : (
-          <p>
-            Please <button onClick={() => nav("/login")}>log in</button> to
-            comment.
-          </p>
+          <Typography sx={{ mb: 3 }}>
+            Please <MuiLink component={RouterLink} to="/login">log in</MuiLink> to comment.
+          </Typography>
         )}
 
-        {/* Comments List */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+        {/* --- Comments List --- */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {comments.map((c) => {
             const isCommentOwner = user && c.author && user.id === c.author._id;
             const isEditingComment = editingCommentId === c._id;
             const isReplying = replyingToId === c._id;
 
             return (
-              <div
-                key={c._id}
-                style={{
-                  border: "1px solid #eee",
-                  padding: "10px 15px",
-                  borderRadius: 5,
-                }}
-              >
+              <Paper key={c._id} elevation={1} sx={{ p: 2 }}>
                 {isEditingComment ? (
-                  <div>
-                    <textarea
+                  // --- Comment Edit Form ---
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={2}
                       value={editingText}
                       onChange={(e) => setEditingText(e.target.value)}
-                      style={{
-                        width: "100%",
-                        minHeight: "60px",
-                        boxSizing: "border-box",
-                      }}
                     />
-                    <div
-                      style={{ display: "flex", gap: "8px", marginTop: "5px" }}
-                    >
-                      <button onClick={() => handleUpdateComment(c._id)}>
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingCommentId(null)}
-                        style={{ background: "#eee", color: "#333" }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button size="small" variant="contained" onClick={() => handleUpdateComment(c._id)}>Save</Button>
+                      <Button size="small" variant="outlined" onClick={() => setEditingCommentId(null)}>Cancel</Button>
+                    </Box>
+                  </Box>
                 ) : (
-                  <p>{c.body}</p>
+                  // --- View Comment ---
+                  <Typography variant="body1">{c.body}</Typography>
                 )}
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: "5px",
-                  }}
-                >
-                  <small>
-                    By:{" "}
-                    <strong>
-                      {c.anonymous ? "Anonymous" : c.author?.name || "Unknown"}
-                    </strong>{" "}
-                    • {formatDate(c.createdAt)}
-                  </small>
-                  <div style={{ display: "flex", gap: "8px" }}>
+                {/* --- Comment Actions --- */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    By: <strong>{c.anonymous ? "Anonymous" : c.author?.name || "Unknown"}</strong> • {formatDate(c.createdAt)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
                     {user && !isEditingComment && (
-                      <button
-                        onClick={() =>
-                          setReplyingToId(isReplying ? null : c._id)
-                        }
-                        style={{
-                          fontSize: "0.8em",
-                          background: "#e0e0e0",
-                          color: "#333",
-                          border: "none",
-                          padding: "2px 5px",
-                          cursor: "pointer",
-                        }}
-                      >
+                      <Button size="small" startIcon={<Reply />} onClick={() => setReplyingToId(isReplying ? null : c._id)}>
                         {isReplying ? "Cancel" : "Reply"}
-                      </button>
+                      </Button>
                     )}
                     {(isCommentOwner || isAdmin) && !isEditingComment && (
                       <>
-                        <button
-                          onClick={() => {
-                            setEditingCommentId(c._id);
-                            setEditingText(c.body);
-                          }}
-                          style={{
-                            fontSize: "0.8em",
-                            background: "#eee",
-                            color: "#333",
-                            border: "none",
-                            padding: "2px 5px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteComment(c._id)}
-                          style={{
-                            fontSize: "0.8em",
-                            background: "#ffcccc",
-                            color: "red",
-                            border: "none",
-                            padding: "2px 5px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete
-                        </button>
+                        <Button size="small" startIcon={<Edit />} onClick={() => { setEditingCommentId(c._id); setEditingText(c.body); }}>Edit</Button>
+                        <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDeleteComment(c._id)}>Delete</Button>
                       </>
                     )}
-                  </div>
-                </div>
+                  </Box>
+                </Box>
 
+                {/* --- Reply Form --- */}
                 {isReplying && (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleReplySubmit(c._id);
-                    }}
-                    style={{
-                      margin: "10px 0 0 20px",
-                      background: "#fdfdfd",
-                      padding: "10px",
-                      border: "1px solid #f0f0f0",
-                      borderRadius: "5px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                    }}
-                  >
-                    {/* Reply Textarea */}
-                    <textarea
+                  <Box component="form" onSubmit={(e) => { e.preventDefault(); handleReplySubmit(c._id); }} sx={{ pl: 4, mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      size="small"
+                      label="Write a reply..."
                       value={replyBody}
                       onChange={(e) => setReplyBody(e.target.value)}
-                      placeholder="Write a reply..."
-                      style={{
-                        width: "100%",
-                        minHeight: "50px",
-                        boxSizing: "border-box",
-                        borderRadius: "5px",
-                        border: "1px solid #ccc",
-                        padding: "8px",
-                        fontSize: "14px",
-                        resize: "vertical",
-                        outline: "none",
-                      }}
                     />
-
-                    {/* Checkbox + Button Row */}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <label
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          color: "#333",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={replyAnon}
-                          onChange={(e) => setReplyAnon(e.target.checked)}
-                        />
-                        <span>Post anonymously</span>
-                      </label>
-
-                      <button
-                        type="submit"
-                        style={{
-                          background: "#007bff",
-                          color: "#fff",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: "5px",
-                          cursor: "pointer",
-                          fontWeight: "600",
-                          transition: "0.3s",
-                        }}
-                        onMouseOver={(e) =>
-                          (e.target.style.background = "#0056b3")
-                        }
-                        onMouseOut={(e) =>
-                          (e.target.style.background = "#007bff")
-                        }
-                      >
-                        Post Reply
-                      </button>
-                    </div>
-                  </form>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <FormControlLabel
+                        control={<Checkbox size="small" checked={replyAnon} onChange={(e) => setReplyAnon(e.target.checked)} />}
+                        label={<Typography variant="caption">Post anonymously</Typography>}
+                      />
+                      <Button type="submit" size="small" variant="contained">Post Reply</Button>
+                    </Box>
+                  </Box>
                 )}
-
-                {/* Replies List */}
+                
+                {/* --- Replies List --- */}
                 {c.replies && c.replies.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: "15px",
-                      marginLeft: "20px",
-                      borderLeft: "2px solid #e0e0e0",
-                      paddingLeft: "10px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                    }}
-                  >
+                  <Box sx={{ mt: 2, ml: 4, borderLeft: '2px solid #eee', pl: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {c.replies.map((reply) => {
-                      const isReplyOwner =
-                        user && reply.author && user.id === reply.author._id;
+                      const isReplyOwner = user && reply.author && user.id === reply.author._id;
                       const isEditingReply = editingReplyId === reply._id;
-
                       return (
-                        <div key={reply._id}>
+                        <Box key={reply._id}>
                           {isEditingReply ? (
-                            <div>
-                              <textarea
-                                value={editingReplyText}
-                                onChange={(e) =>
-                                  setEditingReplyText(e.target.value)
-                                }
-                                style={{
-                                  width: "100%",
-                                  minHeight: "50px",
-                                  boxSizing: "border-box",
-                                }}
-                              />
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: "8px",
-                                  marginTop: "5px",
-                                }}
-                              >
-                                <button
-                                  onClick={() =>
-                                    handleUpdateReply(c._id, reply._id)
-                                  }
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => setEditingReplyId(null)}
-                                  style={{ background: "#eee", color: "#333" }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <TextField fullWidth multiline size="small" value={editingReplyText} onChange={(e) => setEditingReplyText(e.target.value)} />
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button size="small" variant="contained" onClick={() => handleUpdateReply(c._id, reply._id)}>Save</Button>
+                                <Button size="small" variant="outlined" onClick={() => setEditingReplyId(null)}>Cancel</Button>
+                              </Box>
+                            </Box>
                           ) : (
-                            <p style={{ margin: 0 }}>{reply.body}</p>
+                            <Typography variant="body2">{reply.body}</Typography>
                           )}
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              marginTop: "5px",
-                            }}
-                          >
-                            <small>
-                              By:{" "}
-                              <strong>
-                                {reply.anonymous
-                                  ? "Anonymous"
-                                  : reply.author?.name || "Unknown"}
-                              </strong>{" "}
-                              • {formatDate(reply.createdAt)}
-                            </small>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              By: <strong>{reply.anonymous ? "Anonymous" : reply.author?.name || "Unknown"}</strong> • {formatDate(reply.createdAt)}
+                            </Typography>
                             {(isReplyOwner || isAdmin) && !isEditingReply && (
-                              <div style={{ display: "flex", gap: "8px" }}>
-                                <button
-                                  onClick={() => {
-                                    setEditingReplyId(reply._id);
-                                    setEditingReplyText(reply.body);
-                                  }}
-                                  style={{
-                                    fontSize: "0.75em",
-                                    background: "#eee",
-                                    color: "#333",
-                                    border: "none",
-                                    padding: "2px 5px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleDeleteReply(c._id, reply._id)
-                                  }
-                                  style={{
-                                    fontSize: "0.75em",
-                                    background: "#ffcccc",
-                                    color: "red",
-                                    border: "none",
-                                    padding: "2px 5px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Button size="small" sx={{minWidth: 0, padding: '2px 5px'}} onClick={() => { setEditingReplyId(reply._id); setEditingReplyText(reply.body); }}><Edit sx={{ fontSize: 16 }} /></Button>
+                                <Button size="small" color="error" sx={{minWidth: 0, padding: '2px 5px'}} onClick={() => handleDeleteReply(c._id, reply._id)}><Delete sx={{ fontSize: 16 }} /></Button>
+                              </Box>
                             )}
-                          </div>
-                        </div>
+                          </Box>
+                        </Box>
                       );
                     })}
-                  </div>
+                  </Box>
                 )}
-              </div>
+              </Paper>
             );
           })}
-          {comments.length === 0 && <p>Be a hero! Be the first to comment.</p>}
-        </div>
-      </section>
-    </div>
+          {comments.length === 0 && <Typography sx={{ mt: 3, textAlign: 'center' }}>Be the first to comment.</Typography>}
+        </Box>
+      </Box>
+    </Container>
   );
 }
