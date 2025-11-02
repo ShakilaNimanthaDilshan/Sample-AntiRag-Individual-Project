@@ -14,6 +14,8 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import ModerationQueue from './pages/ModerationQueue';
 import TermsAndConditions from './pages/TermsAndConditions';
 import HelpResources from './pages/HelpResources';
+import DocumentedCases from './pages/DocumentedCases';
+import CaseFileForm from './pages/CaseFileForm';
 
 export default function App() {
   const { user } = useAuth();
@@ -34,6 +36,9 @@ export default function App() {
           <Route path="/moderation" element={user ? <ModerationQueue /> : <Navigate to="/login" />} />
           <Route path="/terms" element={<TermsAndConditions />} />
           <Route path="/help-resources" element={<HelpResources />} />
+          <Route path="/documented-cases" element={<DocumentedCases />} />
+          <Route path="/admin/case-files/new" element={user && (user.role === 'admin' || user.role === 'moderator') ? <CaseFileForm /> : <Navigate to="/login" />} />
+          <Route path="/admin/case-files/edit/:id" element={user && (user.role === 'admin' || user.role === 'moderator') ? <CaseFileForm /> : <Navigate to="/login" />} />
         </Routes>
       </main>
     </div>

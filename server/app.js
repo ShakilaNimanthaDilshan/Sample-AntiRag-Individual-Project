@@ -48,6 +48,9 @@ app.use("/api/users", userRoutes);
 const analyticsRoutes = require("./routes/analytics");
 app.use("/api/analytics", analyticsRoutes);
 
+const caseFileRoutes = require('./routes/caseFiles');
+app.use('/api/case-files', caseFileRoutes);
+
 // ======================
 // 📌 Database connection
 // ======================
