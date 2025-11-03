@@ -1,10 +1,25 @@
 // client/src/components/Nav.jsx
 import React from "react";
-import { Link as RouterLink } from "react-router-dom"; // Renamed to avoid conflict
+import { Link as RouterLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { AppBar, Toolbar, Typography, Button, Box, Link as MuiLink } from "@mui/material";
+import { 
+  AppBar, 
+  Toolbar, 
+  Typography, 
+  Button, 
+  Box, 
+  Link as MuiLink, 
+  IconButton,
+  // We removed Avatar
+} from "@mui/material";
 
-export default function Nav() {
+// --- Import Icons ---
+import Brightness4Icon from '@mui/icons-material/Brightness4'; // Dark mode (moon)
+import Brightness7Icon from '@mui/icons-material/Brightness7'; // Light mode (sun)
+// --- End Import Icons ---
+
+
+export default function Nav({ toggleTheme, currentMode }) {
   const { user, logout } = useAuth();
 
   // Helper function to create a Nav Link
@@ -16,7 +31,7 @@ export default function Nav() {
         color: 'white',
         textDecoration: 'none',
         '&:hover': { textDecoration: 'underline' },
-        ...style // Allows custom styles
+        ...style
       }}
     >
       {children}
@@ -24,25 +39,53 @@ export default function Nav() {
   );
 
   return (
-    // AppBar is the main container (the header bar)
     <AppBar position="static">
-      {/* Toolbar handles the padding and alignment */}
       <Toolbar>
-        {/* Typography is for text. 'h6' is a good size for a brand */}
-        <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
-          <NavLink to="/">Uni In</NavLink>
-        </Typography>
+        
+        {/* --- THIS IS THE FIX --- */}
+        <MuiLink 
+          component={RouterLink} 
+          to="/" 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            textDecoration: 'none', 
+            color: 'inherit' 
+          }}
+        >
+          {/* PUT YOUR LOGO IN THE /public FOLDER 
+            AND CHANGE '/logo.png' TO YOUR FILENAME 
+          */}
+          <Box
+            component="img"
+            src="/logo.png" // <-- CHANGE THIS TO YOUR LOGO FILE
+            alt="Uni In Logo"
+            sx={{ 
+              height: 32, // Set logo height
+              width: 32,  // Set logo width
+              mr: 1,      // Margin-right
+            }}
+          />
+          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
+            Uni In
+          </Typography>
+        </MuiLink>
+        {/* --- END OF FIX --- */}
 
-        {/* This Box is a spacer, it pushes everything else to the right */}
         <Box sx={{ flexGrow: 1, ml: 2 }}>
           <NavLink to="/analytics">Analytics</NavLink>
-          <NavLink to="/documented-cases" style={{ marginLeft: '15px' }}>Historic Incidents</NavLink>
+          <NavLink to="/documented-cases" style={{ marginLeft: '15px' }}>
+            Historic Incidents
+          </NavLink>
           <NavLink to="/help-resources" style={{ marginLeft: '15px', color: '#ffeb3b', fontWeight: 'bold' }}>
             Get Help
           </NavLink>
         </Box>
 
-        {/* Right-side links */}
+        <IconButton sx={{ ml: 1 }} onClick={toggleTheme} color="inherit">
+          {currentMode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+        </IconButton>
+
         {user ? (
           <>
             {(user.role === "admin" || user.role === "moderator") && (

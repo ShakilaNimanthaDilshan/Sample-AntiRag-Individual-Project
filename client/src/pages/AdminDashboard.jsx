@@ -16,6 +16,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  useTheme, // <-- 1. IMPORT useTheme
+  FormControl,
+  InputLabel
 } from '@mui/material';
 
 export default function AdminDashboard() {
@@ -24,6 +27,7 @@ export default function AdminDashboard() {
   const [flaggedReports, setFlaggedReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mergeTargets, setMergeTargets] = useState({});
+  const theme = useTheme(); // <-- 2. GET THE THEME
 
   const fetchData = async () => {
     setLoading(true);
@@ -128,7 +132,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Admin Dashboard
       </Typography>
@@ -140,7 +144,8 @@ export default function AdminDashboard() {
         </Typography>
         <TableContainer>
           <Table>
-            <TableHead sx={{ background: '#f4f4f4' }}>
+            {/* --- 3. THIS IS THE FIX --- */}
+            <TableHead sx={{ backgroundColor: theme.palette.action.hover }}>
               <TableRow>
                 <TableCell>Pending Name</TableCell>
                 <TableCell>Actions</TableCell>
@@ -204,7 +209,8 @@ export default function AdminDashboard() {
         </Typography>
         <TableContainer>
           <Table>
-            <TableHead sx={{ background: '#f4f4f4' }}>
+            {/* --- 3. THIS IS THE FIX --- */}
+            <TableHead sx={{ backgroundColor: theme.palette.action.hover }}>
               <TableRow>
                 <TableCell>Report Content</TableCell>
                 <TableCell>Author</TableCell>

@@ -1,8 +1,6 @@
 // client/src/pages/ReportDetail.jsx
 import React, { useState, useEffect } from "react";
-// --- THIS IS THE FIX ---
 import { useParams, useNavigate, Link as RouterLink } from "react-router-dom";
-// --- END OF FIX ---
 import api from "../api";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -342,9 +340,10 @@ export default function ReportDetail() {
           Comments ({comments.length})
         </Typography>
 
-        {/* --- New Comment Form --- */}
+        {/* --- New Comment Form (FIXED) --- */}
         {user ? (
-          <Paper elevation={2} sx={{ p: 2, mb: 3, background: '#f9f9f9' }}>
+          <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
+            {/* REMOVED: background: '#f9f9f9' */}
             <Box component="form" onSubmit={handleCommentSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
                 fullWidth
@@ -370,6 +369,7 @@ export default function ReportDetail() {
             Please <MuiLink component={RouterLink} to="/login">log in</MuiLink> to comment.
           </Typography>
         )}
+        {/* --- END OF FIX --- */}
 
         {/* --- Comments List --- */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -420,9 +420,19 @@ export default function ReportDetail() {
                   </Box>
                 </Box>
 
-                {/* --- Reply Form --- */}
+                {/* --- Reply Form (FIXED) --- */}
                 {isReplying && (
-                  <Box component="form" onSubmit={(e) => { e.preventDefault(); handleReplySubmit(c._id); }} sx={{ pl: 4, mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box 
+                    component="form" 
+                    onSubmit={(e) => { e.preventDefault(); handleReplySubmit(c._id); }} 
+                    sx={{ 
+                      pl: 4, mt: 2, 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: 1, 
+                      // REMOVED: background: '#fdfdfd'
+                    }}
+                  >
                     <TextField
                       fullWidth
                       multiline
@@ -440,6 +450,7 @@ export default function ReportDetail() {
                     </Box>
                   </Box>
                 )}
+                {/* --- END OF FIX --- */}
                 
                 {/* --- Replies List --- */}
                 {c.replies && c.replies.length > 0 && (

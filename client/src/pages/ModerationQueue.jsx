@@ -13,6 +13,7 @@ import {
   CardActionArea,
   CardContent,
   Divider,
+  useTheme // <-- 1. IMPORT useTheme
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
@@ -23,6 +24,7 @@ export default function ModerationQueue() {
   const [caseFiles, setCaseFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const nav = useNavigate();
+  const theme = useTheme(); // <-- 2. GET THE THEME
 
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -71,12 +73,12 @@ export default function ModerationQueue() {
   }
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4 }}>
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       
       {/* --- Case File Management --- */}
       <Paper elevation={3} sx={{ p: { xs: 2, sm: 4 }, mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Manage Documented Cases
+          Manage Historic Incidents {/* <-- RENAMED */}
         </Typography>
         <Button 
           variant="contained" 
@@ -135,14 +137,20 @@ export default function ModerationQueue() {
           <Typography>The moderation queue is empty.</Typography>
         ) : (
           reports.map(r => (
-            // We re-use the same Card component from the Feed for consistency
             <CardActionArea 
               key={r._id} 
               component={RouterLink} 
               to={`/report/${r._id}`}
               sx={{ display: 'block' }}
             >
-              <Card sx={{ mb: 2, border: '1px solid orange', background: '#fffbeb' }}>
+              {/* --- THIS IS THE FIX --- */}
+              <Card sx={{ 
+                mb: 2, 
+                // Dynamically set background color based on theme mode
+                backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#fffbeb',
+                border: `1px solid ${theme.palette.secondary.main}` // Use theme color for border
+              }}>
+              {/* --- END OF FIX --- */}
                 <CardContent>
                   <Typography variant="h5" component="h3">
                     {r.title || 'Experience'}
@@ -150,7 +158,7 @@ export default function ModerationQueue() {
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     {r.university?.name} • {new Date(r.createdAt).toLocaleString()}
                   </Typography>
-                  <Typography variant="body1" sx={{ fontStyle: 'italic', color: '#555' }}>
+                  <Typography variant="body1" sx={{ fontStyle: 'italic' }}> {/* Removed hard-coded color */}
                     {r.anonymous ? 'Posted anonymously' : (r.author?.name || 'Unknown')}
                   </Typography>
                   <Typography variant="body1" sx={{ mt: 1, 

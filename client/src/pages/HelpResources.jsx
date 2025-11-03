@@ -1,11 +1,13 @@
 // client/src/pages/HelpResources.jsx
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom'; // Import RouterLink
 import {
   Container,
   Typography,
   Paper,
   Box,
   Link as MuiLink,
+  useTheme // 1. Import useTheme
 } from '@mui/material';
 import PhoneIcon from '@mui/icons-material/Phone';
 import GppGoodIcon from '@mui/icons-material/GppGood';
@@ -14,6 +16,8 @@ import SchoolIcon from '@mui/icons-material/School';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 export default function HelpResources() {
+  const theme = useTheme(); // 2. Get the theme
+
   const h2Style = {
     borderBottom: '2px solid #eee',
     paddingBottom: '10px',
@@ -22,8 +26,8 @@ export default function HelpResources() {
   };
 
   const contactBoxStyle = {
-    background: '#f9f9f9',
-    border: '1px solid #eee',
+    // 3. Removed hard-coded background
+    border: `1px solid ${theme.palette.divider}`, // Use theme's border color
     borderRadius: '8px',
     padding: '24px',
     marginBottom: '20px',
@@ -33,8 +37,8 @@ export default function HelpResources() {
   };
 
   const dangerStyle = {
-    background: '#fff0f0',
-    border: '1px solid #fcc',
+    background: theme.palette.mode === 'dark' ? '#5f2120' : '#fff0f0', // Dark/light red
+    border: `1px solid ${theme.palette.error.main}`,
     borderRadius: '8px',
     padding: '24px',
     textAlign: 'center',
@@ -59,7 +63,7 @@ export default function HelpResources() {
           This platform is not an emergency service. If you or someone else is in
           immediate physical danger, please contact the Police immediately.
         </Typography>
-        <Typography variant="h4" sx={{ color: '#d00', fontWeight: 'bold', mt: 1 }}>
+        <Typography variant="h4" sx={{ color: 'error.main', fontWeight: 'bold', mt: 1 }}>
           Call 119
         </Typography>
       </Paper>
@@ -101,6 +105,7 @@ export default function HelpResources() {
         these authorities.
       </Typography>
 
+      {/* These boxes now use variant="outlined" which respects dark/light mode */}
       <Paper variant="outlined" sx={contactBoxStyle}>
         <PhoneIcon color="error" sx={{ fontSize: 40 }} />
         <Box>

@@ -1,3 +1,4 @@
+// server/routes/reports.js
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -26,13 +27,22 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
+  
+  // --- THIS IS THE FIX (Part 1) ---
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|webp/;
     const mimetype = allowed.test(file.mimetype);
     const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-    if (mimetype && ext) return cb(null, true);
-    cb(new Error("Only image files are allowed"));
+    
+    if (mimetype && ext) {
+      return cb(null, true);
+    }
+    
+    // Instead of throwing an error, attach it to req and reject the file
+    req.fileValidationError = "Only image files (jpeg, jpg, png, webp) are allowed";
+    cb(null, false);
   },
+  // --- END OF FIX ---
 });
 
 // ========================
@@ -41,8 +51,18 @@ const upload = multer({
 // ========================
 router.post("/", auth, upload.array("media", 5), async (req, res) => {
   try {
+    // --- THIS IS THE FIX (Part 2) ---
+    // Check if the fileFilter set an error
+    if (req.fileValidationError) {
+      return res.status(400).json({ message: req.fileValidationError });
+    }
+    // --- END OF FIX ---
+
     let { title, body, universityId, anonymous, otherUniversityName, isPublic } = req.body;
     let finalUniversityId;
+
+    const isAnonymous = anonymous === 'true' || anonymous === true;
+    const isPublicReport = isPublic === 'true' || isPublic === true;
 
     if (universityId === "OTHER") {
       if (!otherUniversityName) {
@@ -87,16 +107,15 @@ router.post("/", auth, upload.array("media", 5), async (req, res) => {
       title,
       body,
       university: finalUniversityId,
-      // --- FIXED: Always save the author ID, even if anonymous ---
       author: req.user.id,
-      anonymous: !!anonymous,
+      anonymous: isAnonymous,
       media,
-      isPublic: !!isPublic
+      isPublic: isPublicReport,
     });
 
     await report.save();
     const io = req.app.get("socketio");
-    io.emit("analytics_updated"); // This sends the signal
+    io.emit("analytics_updated");
     res.status(201).json({ message: "Report created successfully", report });
   } catch (err) {
     console.error(err);
@@ -124,7 +143,6 @@ router.get('/moderation', auth, async (req, res) => {
 
     const reports = await Report.find(query)
       .populate('university', 'name')
-      // --- FIXED: Added missing fields ---
       .populate('author', 'name _id isStudent profession')
       .sort({ createdAt: -1 });
 
@@ -150,18 +168,15 @@ router.get('/', async (req, res) => {
         { score: { $meta: 'textScore' } }
       )
       .populate('university', 'name')
-      // --- FIXED: Added _id ---
       .populate('author', 'name _id isStudent profession')
       .sort({ score: { $meta: 'textScore' } });
     } else {
       reports = await Report.find({ isPublic: true })
         .populate('university', 'name')
-        // --- FIXED: This was the main bug ---
         .populate('author', 'name _id isStudent profession')
         .sort({ createdAt: -1 });
     }
 
-    // Sanitize anonymous posts
     const sanitized = reports.map(r => {
       const obj = r.toObject();
       if (obj.anonymous) obj.author = null;
@@ -179,7 +194,7 @@ router.get('/', async (req, res) => {
 // 📌 GET a single report by its ID
 // GET /api/reports/:id
 // ========================
-router.get("/:id", getAuthUser, async (req, res) => { // <-- USE getAuthUser
+router.get("/:id", getAuthUser, async (req, res) => {
   try {
     const report = await Report.findById(req.params.id)
       .populate("university", "name _id") 
@@ -187,12 +202,11 @@ router.get("/:id", getAuthUser, async (req, res) => { // <-- USE getAuthUser
 
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    // --- NEW PERMISSION CHECK ---
     let isOwner = false;
     let isAdmin = false;
     let isModerator = false;
 
-    if (req.user) { // Check if a user is logged in
+    if (req.user) {
       const user = await User.findById(req.user.id);
       if (user) {
         isOwner = report.author && report.author._id.equals(user._id);
@@ -201,17 +215,15 @@ router.get("/:id", getAuthUser, async (req, res) => { // <-- USE getAuthUser
       }
     }
 
-    // If the report is NOT public, AND the user is NOT logged in, OR is not the owner/admin/mod...
     if (!report.isPublic && !isOwner && !isAdmin && !isModerator) {
       return res.status(403).json({ message: "You do not have permission to view this report" });
     }
-    // --- END PERMISSION CHECK ---
-
+    
     const sanitized = report.toObject();
     if (sanitized.anonymous) sanitized.author = null;
     sanitized.likeCount = sanitized.likes.length;
     delete sanitized.likes;
-
+    
     res.json(sanitized);
   } catch (err) {
     console.error(err);
@@ -223,7 +235,7 @@ router.get("/:id", getAuthUser, async (req, res) => { // <-- USE getAuthUser
 // ✏️ Update a report
 // PUT /api/reports/:id
 // ========================
-router.put("/:id", auth, upload.array("media", 5), async (req, res) => {
+router.put("/:id", auth, async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found" });
@@ -235,22 +247,15 @@ router.put("/:id", auth, upload.array("media", 5), async (req, res) => {
       return res.status(403).json({ message: "User not authorized" });
     }
 
-    let { title, body, anonymous } = req.body;
-    anonymous = anonymous === "true" || anonymous === true;
+    let { title, body, anonymous, isPublic } = req.body;
 
-    let media = report.media;
-    if (req.files && req.files.length > 0) {
-      const base = process.env.SERVER_BASE || "http://localhost:5000";
-      media = req.files.map((f) => ({
-        url: `${base}/uploads/${f.filename}`,
-        type: f.mimetype.startsWith("image/") ? "image" : "file",
-      }));
-    }
+    const isAnonymous = anonymous === 'true' || anonymous === true;
+    const isPublicReport = isPublic === 'true' || isPublic === true;
 
     report.title = title || report.title;
     report.body = body || report.body;
-    report.anonymous = anonymous ?? report.anonymous;
-    report.media = media;
+    report.anonymous = isAnonymous;
+    report.isPublic = isPublicReport;
 
     await report.save();
     res.json({ message: "Report updated successfully", report });
@@ -288,8 +293,6 @@ router.delete("/:id", auth, async (req, res) => {
 // ========================
 // --- REACTIONS (Like / Flag) ---
 // ========================
-
-// Toggle LIKE on a report
 router.put("/:id/like", auth, async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
@@ -308,7 +311,6 @@ router.put("/:id/like", auth, async (req, res) => {
   }
 });
 
-// FLAG a report
 router.put("/:id/flag", auth, async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
@@ -333,8 +335,6 @@ router.put("/:id/flag", auth, async (req, res) => {
 // ========================
 // --- COMMENTS ---
 // ========================
-
-// POST a new comment on a report
 router.post("/:id/comments", auth, async (req, res) => {
   try {
     const { body, anonymous } = req.body;
@@ -344,14 +344,15 @@ router.post("/:id/comments", auth, async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ message: "Report not found" });
 
+    const isAnonymous = anonymous === 'true' || anonymous === true;
+
     const newComment = new Comment({
       body,
       report: req.params.id,
       author: req.user.id,
-      anonymous: !!anonymous,
+      anonymous: isAnonymous,
     });
     await newComment.save();
-    // --- FIXED: Added missing fields ---
     await newComment.populate('author', 'name _id isStudent profession');
     res.status(201).json(newComment);
   } catch (err) {
@@ -359,16 +360,13 @@ router.post("/:id/comments", auth, async (req, res) => {
   }
 });
 
-// GET all comments for a report
 router.get("/:id/comments", async (req, res) => {
   try {
-    // --- FIXED: Added missing fields ---
     const comments = await Comment.find({ report: req.params.id })
       .populate("author", "name _id isStudent profession")
       .populate("replies.author", "name _id isStudent profession")
       .sort({ createdAt: -1 });
 
-    // --- FIXED: Removed bad sanitization ---
     res.json(comments);
   } catch (err) {
     console.error(err);
@@ -376,7 +374,6 @@ router.get("/:id/comments", async (req, res) => {
   }
 });
 
-// --- UPDATE A COMMENT ---
 router.put("/:id/comments/:commentId", auth, async (req, res) => {
   try {
     const { body } = req.body;
@@ -394,7 +391,6 @@ router.put("/:id/comments/:commentId", auth, async (req, res) => {
     comment.body = body;
     await comment.save();
 
-    // --- FIXED: Added missing fields ---
     await comment.populate("author", "name _id isStudent profession");
     await comment.populate("replies.author", "name _id isStudent profession");
     
@@ -404,7 +400,6 @@ router.put("/:id/comments/:commentId", auth, async (req, res) => {
   }
 });
 
-// --- DELETE A COMMENT ---
 router.delete("/:id/comments/:commentId", auth, async (req, res) => {
   try {
     let comment = await Comment.findById(req.params.commentId);
@@ -426,8 +421,6 @@ router.delete("/:id/comments/:commentId", auth, async (req, res) => {
 // ========================
 // --- REPLIES ---
 // ========================
-
-// --- CREATE A REPLY ---
 router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
   try {
     const { body, anonymous } = req.body;
@@ -437,10 +430,12 @@ router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
     const comment = await Comment.findById(req.params.commentId);
     if (!comment) return res.status(404).json({ message: "Comment not found" });
 
+    const isAnonymous = anonymous === 'true' || anonymous === true;
+
     const newReply = {
       body,
       author: req.user.id,
-      anonymous: !!anonymous,
+      anonymous: isAnonymous,
     };
     comment.replies.push(newReply);
     await comment.save();
@@ -452,7 +447,6 @@ router.post("/:id/comments/:commentId/replies", auth, async (req, res) => {
   }
 });
 
-// --- UPDATE A REPLY ---
 router.put(
   "/:id/comments/:commentId/replies/:replyId",
   auth,
@@ -484,7 +478,6 @@ router.put(
   }
 );
 
-// --- DELETE A REPLY ---
 router.delete(
   "/:id/comments/:commentId/replies/:replyId",
   auth,

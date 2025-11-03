@@ -1,49 +1,89 @@
 // client/src/theme.js
 import { createTheme } from '@mui/material/styles';
+import { green, amber, grey } from '@mui/material/colors';
 
-const theme = createTheme({
+// This function creates our theme
+const getTheme = (mode) => createTheme({
   palette: {
-    // You can change these colors
-    primary: {
-      main: '#1976d2', // A standard professional blue
-    },
-    secondary: {
-      main: '#dc004e', // A standard accent color
-    },
-    // This sets the background for components like Paper and Card
-    background: {
-      default: '#f4f6f8', // The light grey page background
-      paper: '#ffffff',   // The white for all cards/papers
-    },
+    mode, // This is the magic part: 'light' or 'dark'
+    
+    ...(mode === 'light'
+      ? {
+          // --- LIGHT MODE PALETTE ---
+          primary: {
+            main: '#2E7D32', // Green
+          },
+          secondary: {
+            main: '#FFAB00', // Amber
+          },
+          background: {
+            default: '#f4f6f8', // Light grey page
+            paper: '#ffffff',   // White cards
+          },
+        }
+      : {
+          // --- DARK MODE PALETTE ---
+          primary: {
+            main: green[300], // A lighter green for dark mode
+          },
+          secondary: {
+            main: amber[300], // A lighter amber
+          },
+          background: {
+            default: '#121212', // Standard dark background
+            paper: '#1e1e1e',   // Darker cards
+          },
+        }
+    ),
   },
   typography: {
     fontFamily: 'Roboto, Arial, sans-serif',
-    h4: {
-      fontWeight: 700,
-    },
-    h5: {
-      fontWeight: 600,
-    },
+    h4: { fontWeight: 700 },
+    h5: { fontWeight: 600 },
   },
+  // --- THIS IS THE UPDATED PART ---
+  // We move 'components' inside the function
+  // so we can use the 'mode' variable
   components: {
-    // Default styles for all Paper components
     MuiPaper: {
       styleOverrides: {
-        root: {
-          borderRadius: 8, // Softer edges for all cards
+        root: { 
+          borderRadius: 8,
+          // Use the theme's paper background
+          backgroundImage: 'none', // Fixes a dark mode paper bug
         },
       },
     },
-    // Default styles for all Buttons
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8, // Softer edges for buttons
-          textTransform: 'none', // Buttons will have "Login" instead of "LOGIN"
+          borderRadius: 8,
+          textTransform: 'none',
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          // In dark mode, AppBar should be dark
+          backgroundColor: mode === 'light' ? '#0e4dd4ff' : grey[900],
+        },
+      },
+    },
+    // --- THIS IS THE FIX FOR TEXT FIELDS ---
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          // Use a different background color for light vs dark
+          backgroundColor: mode === 'light' ? grey[50] : grey[900],
+          borderRadius: 8,
+          '& .MuiOutlinedInput-root': {
+            borderRadius: 8,
+          },
         },
       },
     },
   },
 });
 
-export default theme;
+export default getTheme;

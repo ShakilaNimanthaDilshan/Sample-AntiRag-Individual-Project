@@ -44,70 +44,83 @@ export default function Login(){
   }
 
   return (
-    // Container component centers the content
-    <Container component="main" maxWidth="xs">
-      <Paper 
-        elevation={3} // Adds a subtle shadow
-        sx={{
-          mt: 8, // margin-top: 64px
-          p: 4, // padding: 32px
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Typography component="h1" variant="h5">
-          Login
-        </Typography>
-        
-        <Box component="form" onSubmit={submit} sx={{ mt: 1, width: '100%' }}>
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            id="email"
-            label="Email Address"
-            name="email"
-            autoComplete="email"
-            autoFocus
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="password"
-            label="Password"
-            type="password"
-            id="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-          />
+    // --- THIS IS THE NEW WRAPPER ---
+    <Box 
+      sx={{
+        minHeight: 'calc(100vh - 64px)', // Full height minus AppBar (64px)
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        // Here is the gradient, inspired by your image
+        background: 'linear-gradient(45deg, #0f828aff 30%, #2a1fc2ff 90%)',
+        p: { xs: 2, sm: 4 } // Add padding for small screens
+      }}
+    >
+      <Container component="main" maxWidth="xs" sx={{ p: 0 }}>
+        <Paper 
+          elevation={6} // Stronger shadow
+          sx={{
+            p: 4, // padding: 32px
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            borderRadius: 2 // Softer edges
+          }}
+        >
+          <Typography component="h1" variant="h5">
+            Login
+          </Typography>
+          
+          <Box component="form" onSubmit={submit} sx={{ mt: 1, width: '100%' }}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="email"
+              label="Email Address"
+              name="email"
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="password"
+              label="Password"
+              type="password"
+              id="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
 
-          {error && (
-            <Typography color="error" align="center" sx={{ mt: 2 }}>
-              {error}
-            </Typography>
-          )}
+            {error && (
+              <Typography color="error" align="center" sx={{ mt: 2 }}>
+                {error}
+              </Typography>
+            )}
 
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2 }} // margin-top & margin-bottom
-          >
-            Sign In
-          </Button>
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{ mt: 3, mb: 2 }} // margin-top & margin-bottom
+            >
+              Sign In
+            </Button>
 
-          <Box sx={{ textAlign: 'center' }}>
-            <MuiLink component={RouterLink} to="/register" variant="body2">
-              {"Don't have an account? Register"}
-            </MuiLink>
+            <Box sx={{ textAlign: 'center' }}>
+              <MuiLink component={RouterLink} to="/register" variant="body2">
+                {"Don't have an account? Register"}
+              </MuiLink>
+            </Box>
           </Box>
-        </Box>
-      </Paper>
-    </Container>
+        </Paper>
+      </Container>
+    </Box>
   )
 }

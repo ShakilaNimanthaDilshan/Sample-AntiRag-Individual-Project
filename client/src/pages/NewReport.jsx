@@ -17,8 +17,11 @@ import {
   FormControlLabel,
   Checkbox,
   Divider,
+  CircularProgress,
+  IconButton // <-- 1. IMPORT IconButton
 } from '@mui/material';
-import PhotoCamera from '@mui/icons-material/PhotoCamera'; // For a nice upload button
+import PhotoCamera from '@mui/icons-material/PhotoCamera';
+import CloseIcon from '@mui/icons-material/Close'; // <-- 2. IMPORT CloseIcon
 
 export default function NewReport() {
   const { user } = useAuth();
@@ -26,11 +29,12 @@ export default function NewReport() {
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [universityId, setUniversityId] = useState(user?.isStudent ? user.university : '');
+  const [universityId, setUniversityId] = useState(user?.isStudent ? user.university : ''); 
   const [universities, setUniversities] = useState([]);
   const [otherUniversityName, setOtherUniversityName] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
+  
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -47,20 +51,33 @@ export default function NewReport() {
       } catch (err) {
         console.error("Failed to fetch universities", err);
       }
-    })();
+    })()
   }, []);
 
   // Generate previews when files change
   useEffect(() => {
+    // This effect creates new URLs when 'files' state changes
+    // and revokes old URLs on cleanup
     const urls = files.map(file => URL.createObjectURL(file));
     setPreviews(urls);
-    return () => urls.forEach(url => URL.revokeObjectURL(url));
-  }, [files]);
+    return () => {
+      urls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [files]); // This dependency is key
 
   const onFileChange = (e) => {
     const selected = Array.from(e.target.files).slice(0, 5);
     setFiles(selected);
   };
+
+  // --- 3. ADD THIS NEW HANDLER ---
+  const handleRemoveImage = (indexToRemove) => {
+    // We just update the 'files' state.
+    // The 'useEffect' hook above will automatically run
+    // and update the 'previews' state for us.
+    setFiles(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
+  };
+  // --- END OF NEW HANDLER ---
 
   const submit = async (e) => {
     e.preventDefault();
@@ -116,7 +133,7 @@ export default function NewReport() {
         elevation={3} 
         sx={{
           mt: 8,
-          p: { xs: 2, sm: 4 }, // Smaller padding on extra-small screens
+          p: { xs: 2, sm: 4 },
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -149,16 +166,14 @@ export default function NewReport() {
             {!user ? (
               <p>Loading user info...</p>
             ) : user.isStudent ? (
-              // --- IF USER IS A STUDENT ---
               <TextField
                 fullWidth
                 label="University (Locked to your profile)"
                 value={getStudentUniversityName()}
                 disabled
-                variant="filled" // Filled variant looks better when disabled
+                variant="filled"
               />
             ) : (
-              // --- IF USER IS A NON-STUDENT (Show dropdown) ---
               <>
                 <FormControl fullWidth required>
                   <InputLabel id="uni-select-label">Which university is this report about?</InputLabel>
@@ -187,13 +202,12 @@ export default function NewReport() {
                 )}
               </>
             )}
-            {/* --- END OF CONDITIONAL FIELDS --- */}
 
             <Divider sx={{ my: 1 }} />
 
             <Button
               variant="outlined"
-              component="label" // This makes the button act as a file input label
+              component="label"
               startIcon={<PhotoCamera />}
             >
               Upload Images (Max 5)
@@ -201,23 +215,48 @@ export default function NewReport() {
                 type="file" 
                 accept="image/*" 
                 multiple 
-                hidden // Hide the ugly default input
+                hidden
                 onChange={onFileChange} 
               />
             </Button>
 
-            {/* Image previews */}
+            {/* --- 4. UPDATED IMAGE PREVIEW BLOCK --- */}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {previews.map((p, i) => (
                 <Box
                   key={i}
-                  component="img"
-                  src={p}
-                  alt="preview"
-                  sx={{ width: 120, height: 90, objectFit: 'cover', border: '1px solid #ddd', borderRadius: '4px' }}
-                />
+                  sx={{ 
+                    position: 'relative', 
+                    width: 120, 
+                    height: 90,
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={p}
+                    alt="preview"
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover', border: '1px solid #ddd', borderRadius: '4px' }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => handleRemoveImage(i)}
+                    sx={{
+                      position: 'absolute',
+                      top: 2,
+                      right: 2,
+                      color: 'white',
+                      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                      }
+                    }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
               ))}
             </Box>
+            {/* --- END OF UPDATE --- */}
 
             <FormControlLabel
               control={
@@ -250,7 +289,7 @@ export default function NewReport() {
               fullWidth
               variant="contained"
               disabled={loading}
-              sx={{ mt: 2, p: 1.5 }} // p: padding
+              sx={{ mt: 2, p: 1.5 }}
             >
               {loading ? <CircularProgress size={24} /> : "Submit Report"}
             </Button>
